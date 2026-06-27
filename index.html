@@ -2,141 +2,369 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>서울 9호선 실시간 대시보드</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>9호선 기관사 앱</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#0d1117;color:#e6edf3;font-family:'Segoe UI',sans-serif;min-height:100vh}
-header{background:#161b22;border-bottom:2px solid #b8a000;padding:14px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.logo{display:flex;align-items:center;gap:8px}
-.logo-circle{width:34px;height:34px;border-radius:50%;background:#b8a000;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;color:#000}
-header h1{font-size:17px;font-weight:700;color:#d4af00}
-.mode-badge{background:#1f4a1f;color:#3fb950;border:1px solid #3fb950;font-size:11px;padding:3px 8px;border-radius:12px;margin-left:4px}
-.api-form{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;align-items:center}
-.api-form input{background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:7px 11px;border-radius:6px;font-size:12px;width:220px}
-.api-form input:focus{outline:none;border-color:#b8a000}
-.btn{background:#b8a000;color:#000;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;white-space:nowrap}
-.btn:hover{background:#d4c200}
-.btn.sec{background:#21262d;color:#e6edf3;border:1px solid #30363d}
-.btn.sec:hover{background:#30363d}
-.btn.active{background:#1f4a1f;color:#3fb950;border:1px solid #3fb950}
+:root{
+  --gold:#C8A600;--gold-dim:#8a7200;--gold-bg:rgba(200,166,0,.13);
+  --up:#C8A600;--down:#4A9EE8;
+  --bg:#0b0f14;--bg2:#131920;--bg3:#1c2330;--bg4:#242e3d;
+  --txt:#e8edf4;--txt2:#8fa0b4;--txt3:#4e6070;
+  --red:#f04e4e;--green:#3cb96b;--orange:#e88a1a;
+  --radius:12px;--radius-sm:8px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:-apple-system,'Noto Sans KR','Segoe UI',sans-serif}
 
-.status-bar{display:flex;align-items:center;gap:10px;padding:8px 20px;background:#161b22;font-size:11px;color:#8b949e;border-bottom:1px solid #21262d;flex-wrap:wrap}
-.dot{width:8px;height:8px;border-radius:50%;background:#3fb950;display:inline-block;animation:blink 1.5s infinite}
-.dot.off{background:#f85149;animation:none}
+/* ── 앱 레이아웃 ── */
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+#header{background:var(--bg2);border-bottom:1.5px solid var(--gold);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo-badge{width:32px;height:32px;border-radius:50%;background:var(--gold);color:#000;font-weight:900;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.app-title{font-size:15px;font-weight:700;color:var(--gold);flex:1}
+.status-pill{display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--txt2)}
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 1.5s infinite}
+.pulse.off{background:var(--red);animation:none}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
-.tabs{display:flex;padding:0 20px;background:#161b22;border-bottom:1px solid #21262d}
-.tab{padding:11px 18px;cursor:pointer;font-size:13px;color:#8b949e;border-bottom:2px solid transparent;transition:all .2s}
-.tab.active{color:#d4af00;border-bottom-color:#d4af00}
-.tab:hover{color:#e6edf3}
+/* ── 탭 바 ── */
+#tabBar{display:flex;background:var(--bg2);border-bottom:1px solid var(--bg4);flex-shrink:0}
+.tab-btn{flex:1;padding:11px 4px 9px;display:flex;flex-direction:column;align-items:center;gap:3px;border:none;background:none;color:var(--txt3);cursor:pointer;transition:color .2s;font-size:10px;border-bottom:2px solid transparent}
+.tab-btn.active{color:var(--gold);border-bottom-color:var(--gold)}
+.tab-icon{font-size:18px;line-height:1}
 
-.container{padding:20px}
+/* ── 페이지 컨테이너 ── */
+#pages{flex:1;overflow:hidden;position:relative}
+.page{position:absolute;inset:0;overflow-y:auto;display:none;-webkit-overflow-scrolling:touch}
+.page.active{display:block}
 
-/* 노선도 */
-#mapView{overflow-x:auto;padding-bottom:8px}
-.map-wrap{position:relative;padding:20px 20px 16px;min-width:960px}
+/* ════════════════════════════════
+   PAGE 1 — 실시간 노선도
+════════════════════════════════ */
+#mapPage{background:var(--bg)}
 
-/* 상행/하행 트랙 */
-.track-up{position:absolute;left:30px;right:30px;height:5px;background:#b8a000;top:72px;border-radius:3px;z-index:0}
-.track-down{position:absolute;left:30px;right:30px;height:5px;background:#4f9cf0;top:132px;border-radius:3px;z-index:0}
+/* 상단 요약 카드 */
+.summary-strip{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:12px 14px 0}
+.s-card{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--radius-sm);padding:8px 10px;text-align:center}
+.s-val{font-size:17px;font-weight:700;color:var(--gold)}
+.s-val.green{color:var(--green)}
+.s-val.red{color:var(--red)}
+.s-val.blue{color:var(--down)}
+.s-label{font-size:9px;color:var(--txt3);margin-top:2px}
 
-.track-label-up{position:absolute;left:6px;top:69px;font-size:9px;color:#b8a000;font-weight:700}
-.track-label-down{position:absolute;left:6px;top:129px;font-size:9px;color:#4f9cf0;font-weight:700}
+/* 내 열차 간격 패널 */
+.gap-panel{margin:10px 14px 0;background:var(--bg2);border:1px solid var(--gold-dim);border-radius:var(--radius);padding:12px 14px}
+.gap-panel-title{font-size:11px;color:var(--gold);font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.gap-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
+.gap-box{background:var(--bg3);border-radius:var(--radius-sm);padding:10px 8px;text-align:center;border:1px solid var(--bg4)}
+.gap-box.warn{border-color:var(--red)}
+.gap-box.caution{border-color:var(--orange)}
+.gap-box.ok{border-color:var(--green)}
+.gap-dir{font-size:9px;color:var(--txt3);margin-bottom:3px}
+.gap-time{font-size:18px;font-weight:800;line-height:1}
+.gap-time.warn{color:var(--red)}
+.gap-time.caution{color:var(--orange)}
+.gap-time.ok{color:var(--green)}
+.gap-stn{font-size:10px;color:var(--txt2);margin-top:3px}
+.gap-stations{font-size:9px;color:var(--txt3);margin-top:1px}
+.gap-me{display:flex;flex-direction:column;align-items:center;gap:2px}
+.gap-me-badge{background:var(--gold);color:#000;font-size:9px;font-weight:900;border-radius:4px;padding:2px 6px}
+.gap-me-stn{font-size:10px;color:var(--gold)}
+.gap-arrow{color:var(--txt3);font-size:14px;text-align:center}
 
-.stations-row{display:flex;justify-content:space-between;position:relative;z-index:1;margin-top:0}
-.stn{display:flex;flex-direction:column;align-items:center;cursor:pointer;width:28px}
-.stn-name{font-size:8.5px;color:#8b949e;text-align:center;line-height:1.3;height:28px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:4px;word-break:keep-all}
-.stn-circle{width:13px;height:13px;border-radius:50%;background:#161b22;border:2.5px solid #b8a000;margin:0 auto;transition:all .2s}
-.stn.express .stn-circle{background:#b8a000}
-.stn:hover .stn-circle{transform:scale(1.5)}
-.stn-bottom{height:40px}/* 하단 여백 */
+/* 범례 */
+.legend{display:flex;gap:10px;padding:8px 14px 0;flex-wrap:wrap}
+.li{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--txt2)}
+.lb{width:12px;height:7px;border-radius:2px}
+
+/* 노선도 스크롤 영역 */
+.map-scroll{overflow-x:auto;padding:8px 0 4px;-webkit-overflow-scrolling:touch}
+.map-wrap{position:relative;padding:10px 20px 12px;min-width:1040px}
+.track-up{position:absolute;left:30px;right:30px;height:4px;background:var(--up);top:66px;border-radius:2px;z-index:0}
+.track-down{position:absolute;left:30px;right:30px;height:4px;background:var(--down);top:118px;border-radius:2px;z-index:0}
+.track-lbl-up{position:absolute;left:4px;top:63px;font-size:8px;color:var(--up);font-weight:700}
+.track-lbl-dn{position:absolute;left:4px;top:115px;font-size:8px;color:var(--down);font-weight:700}
+.stations-row{display:flex;justify-content:space-between;position:relative;z-index:1}
+.stn{display:flex;flex-direction:column;align-items:center;width:26px;cursor:pointer}
+.stn-name{font-size:7.5px;color:var(--txt3);text-align:center;line-height:1.2;height:26px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:3px;word-break:keep-all}
+.stn-name.express{color:var(--txt2)}
+.stn-circle{width:11px;height:11px;border-radius:50%;background:var(--bg);border:2px solid var(--up);margin:0 auto;transition:transform .2s}
+.stn.express .stn-circle{background:var(--up);border-color:var(--up)}
+.stn-circle.my-train-stn{border-color:var(--gold);box-shadow:0 0 6px var(--gold);background:var(--gold)}
+.stn-bottom{height:34px}
 
 /* 열차 마커 */
-.train-marker{position:absolute;z-index:10;transition:left .8s cubic-bezier(.4,0,.2,1);pointer-events:auto;cursor:pointer}
-.train-marker:hover .train-tooltip{display:block}
-.train-body{display:flex;align-items:center;justify-content:center;width:26px;height:14px;border-radius:3px;font-size:8px;font-weight:900;color:#000;position:relative}
-.train-body.up{background:#e6b800}
-.train-body.down{background:#4f9cf0;color:#fff}
-.train-body.express-t{background:#f85149!important;color:#fff!important;box-shadow:0 0 6px 2px rgba(248,81,73,.7)}
-.train-num{font-size:7px;opacity:.8;text-align:center;margin-top:1px;color:#ccc;white-space:nowrap}
-.train-tooltip{display:none;position:absolute;bottom:22px;left:50%;transform:translateX(-50%);background:#21262d;border:1px solid #30363d;border-radius:6px;padding:6px 8px;font-size:10px;color:#e6edf3;white-space:nowrap;z-index:20;min-width:90px}
+.train-marker{position:absolute;z-index:10;cursor:pointer;transition:left .8s cubic-bezier(.4,0,.2,1)}
+.train-body{width:22px;height:12px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:900;color:#000;position:relative}
+.train-body.up{background:var(--up)}
+.train-body.down{background:var(--down);color:#fff}
+.train-body.express-t{background:var(--red)!important;color:#fff!important}
+.train-body.my{box-shadow:0 0 8px 3px rgba(255,220,0,.7);border:1.5px solid #fff}
+.train-num{font-size:7px;color:var(--txt3);text-align:center;line-height:1;margin-top:1px}
+.train-num.my{color:var(--gold);font-weight:700}
 
-/* 도착 정보 */
-.station-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px}
-.scard{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:12px}
-.scard h3{font-size:13px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px}
-.ebadge{background:#b8a000;color:#000;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700}
-.arrival-item{display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:5px 8px;border-radius:5px;background:#0d1117;margin-bottom:4px}
-.adir{color:#8b949e}
-.atime{font-weight:700}
-.atime.soon{color:#f85149}
-.atime.med{color:#e6b800}
-.atime.ok{color:#3fb950}
-.atrain{font-size:9px;color:#8b949e}
+/* 도착정보 탭 */
+.section-head{padding:10px 14px 4px;font-size:11px;color:var(--txt3);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.arrival-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:4px 14px 14px}
+.a-card{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--radius-sm);padding:10px}
+.a-card-head{display:flex;align-items:center;gap:4px;margin-bottom:6px}
+.a-card-name{font-size:12px;font-weight:700;color:var(--txt)}
+.exp-badge{background:var(--gold);color:#000;font-size:8px;padding:1px 4px;border-radius:3px;font-weight:700}
+.a-item{display:flex;justify-content:space-between;align-items:center;font-size:10px;padding:3px 0;border-bottom:1px solid var(--bg3)}
+.a-item:last-child{border:none}
+.a-dir{color:var(--txt3)}
+.a-time{font-weight:700}
+.a-time.soon{color:var(--red)}
+.a-time.med{color:var(--orange)}
+.a-time.ok{color:var(--green)}
 
-.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:#8b949e;margin-bottom:14px;align-items:center}
-.li{display:flex;align-items:center;gap:4px}
-.lb{width:14px;height:8px;border-radius:2px}
+/* ════════════════════════════════
+   PAGE 2 — 간격 상세
+════════════════════════════════ */
+#gapPage{background:var(--bg);padding:14px}
+.gap-detail-title{font-size:14px;font-weight:700;color:var(--gold);margin-bottom:12px}
+.gap-train-card{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px}
+.gtc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.gtc-num{font-size:12px;font-weight:700}
+.gtc-type{font-size:10px;padding:2px 6px;border-radius:4px}
+.gtc-type.up{background:rgba(200,166,0,.2);color:var(--up)}
+.gtc-type.down{background:rgba(74,158,232,.2);color:var(--down)}
+.gtc-type.express{background:rgba(240,78,78,.2);color:var(--red)}
+.gap-metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.gm-box{background:var(--bg3);border-radius:6px;padding:8px;text-align:center}
+.gm-val{font-size:14px;font-weight:700;color:var(--txt)}
+.gm-lab{font-size:9px;color:var(--txt3);margin-top:2px}
+.gap-warn-bar{background:rgba(240,78,78,.15);border:1px solid rgba(240,78,78,.4);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--red);display:none;align-items:center;gap:6px}
+.gap-warn-bar.show{display:flex}
 
-.info-box{background:#1a1f2e;border:1px solid #2d4a7a;color:#79aef0;padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:14px;line-height:1.6}
+/* ════════════════════════════════
+   PAGE 3 — PDF 매뉴얼
+════════════════════════════════ */
+#pdfPage{background:var(--bg);display:flex;flex-direction:column}
+.pdf-toolbar{background:var(--bg2);border-bottom:1px solid var(--bg4);padding:10px 14px;flex-shrink:0}
+.pdf-search-wrap{display:flex;gap:8px;margin-bottom:8px}
+.pdf-search{flex:1;background:var(--bg3);border:1px solid var(--bg4);color:var(--txt);border-radius:var(--radius-sm);padding:9px 12px;font-size:13px;outline:none}
+.pdf-search:focus{border-color:var(--gold)}
+.pdf-search::placeholder{color:var(--txt3)}
+.search-btn{background:var(--gold);color:#000;border:none;border-radius:var(--radius-sm);padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.pdf-file-tabs{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.pdf-file-tabs::-webkit-scrollbar{display:none}
+.pdf-ftab{background:var(--bg3);border:1px solid var(--bg4);border-radius:20px;padding:4px 10px;font-size:10px;color:var(--txt2);cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .2s}
+.pdf-ftab.active{background:var(--gold-bg);border-color:var(--gold);color:var(--gold)}
+.pdf-add-btn{background:var(--bg3);border:1px dashed var(--bg4);border-radius:20px;padding:4px 10px;font-size:10px;color:var(--txt3);cursor:pointer;white-space:nowrap;flex-shrink:0}
+
+/* 검색 결과 */
+.pdf-results{flex:1;overflow-y:auto;padding:10px 14px;-webkit-overflow-scrolling:touch}
+.result-count{font-size:11px;color:var(--txt3);margin-bottom:8px}
+.result-card{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px;cursor:pointer;transition:border-color .2s}
+.result-card:active{border-color:var(--gold)}
+.rc-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
+.rc-file{font-size:10px;color:var(--gold);font-weight:700}
+.rc-page{font-size:10px;color:var(--txt3);background:var(--bg3);border-radius:4px;padding:1px 6px}
+.rc-text{font-size:12px;color:var(--txt2);line-height:1.6}
+.rc-text mark{background:rgba(200,166,0,.35);color:var(--gold);border-radius:2px;padding:0 1px}
+.pdf-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center;color:var(--txt3)}
+.pdf-empty-icon{font-size:36px;margin-bottom:12px}
+.pdf-empty-title{font-size:14px;font-weight:700;color:var(--txt2);margin-bottom:6px}
+.pdf-empty-desc{font-size:12px;line-height:1.6}
+
+/* PDF 뷰어 */
+.pdf-viewer-wrap{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;flex-direction:column;display:none}
+.pdf-viewer-wrap.show{display:flex}
+.pdf-viewer-header{background:var(--bg2);border-bottom:1px solid var(--bg4);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.pdf-viewer-back{background:var(--bg3);border:1px solid var(--bg4);color:var(--txt);border-radius:var(--radius-sm);padding:6px 12px;font-size:12px;cursor:pointer}
+.pdf-viewer-title{font-size:13px;font-weight:700;color:var(--txt);flex:1}
+.pdf-viewer-page{font-size:11px;color:var(--txt2)}
+.pdf-canvas-wrap{flex:1;overflow:auto;display:flex;flex-direction:column;align-items:center;padding:10px;-webkit-overflow-scrolling:touch}
+.pdf-canvas-wrap canvas{max-width:100%;border-radius:4px}
+.pdf-nav{display:flex;justify-content:center;align-items:center;gap:14px;padding:10px;background:var(--bg2);border-top:1px solid var(--bg4);flex-shrink:0}
+.pdf-nav-btn{background:var(--bg3);border:1px solid var(--bg4);color:var(--txt);border-radius:var(--radius-sm);padding:7px 16px;font-size:12px;cursor:pointer}
+.pdf-nav-btn:disabled{opacity:.3;cursor:default}
+
+/* 로딩 */
+.loading-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:200;display:none}
+.loading-overlay.show{display:flex}
+.loading-box{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--radius);padding:20px 28px;text-align:center}
+.spinner{width:28px;height:28px;border:3px solid var(--bg4);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 바텀 네비 */
+#bottomNav{background:var(--bg2);border-top:1px solid var(--bg4);display:flex;padding-bottom:var(--safe-bottom);flex-shrink:0}
+
+/* 스크롤바 */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px}
+
+/* 업로드 버튼 */
+#pdfUpload{display:none}
+
+.no-results{padding:20px;text-align:center;color:var(--txt3);font-size:13px}
 </style>
 </head>
 <body>
-<header>
-  <div class="logo">
-    <div class="logo-circle">9</div>
-    <h1>서울 9호선 실시간 대시보드 <span class="mode-badge" id="modeBadge">🟢 시뮬레이션</span></h1>
-  </div>
-  <div class="api-form">
-    <input type="text" id="apiKeyInput" placeholder="실시간 지하철 API 키 입력 (선택)" value="486c7a6b737a6c643234714a584646" />
-    <button class="btn" onclick="loadReal()">🔌 실제 API</button>
-    <button class="btn sec active" id="simBtn" onclick="startSim()">🎮 시뮬레이션</button>
-    <button class="btn sec" id="autoBtn" onclick="toggleAuto()">⏱ 자동갱신</button>
-  </div>
-</header>
+<div id="app">
 
-<div class="status-bar">
-  <span id="statusDot" class="dot"></span>
-  <span id="statusText">시뮬레이션 모드로 운행 중</span>
-  <span style="margin-left:auto" id="lastUpd"></span>
-  <span id="autoStat"></span>
-</div>
-
-<div class="tabs">
-  <div class="tab active" onclick="switchTab('map')">🗺 노선도</div>
-  <div class="tab" onclick="switchTab('list')">📋 도착정보</div>
-</div>
-
-<div class="container">
-  <div id="errorBox" style="display:none"></div>
-
-  <div id="mapView">
-    <div class="legend">
-      <div class="li"><div class="lb" style="background:#e6b800"></div> 상행 일반</div>
-      <div class="li"><div class="lb" style="background:#e6b800;box-shadow:0 0 4px #e6b800"></div> 상행 급행</div>
-      <div class="li"><div class="lb" style="background:#4f9cf0"></div> 하행 일반</div>
-      <div class="li"><div class="lb" style="background:#4f9cf0;box-shadow:0 0 4px #4f9cf0"></div> 하행 급행</div>
-      <div class="li"><div style="width:10px;height:10px;border-radius:50%;background:#b8a000"></div> 급행정차역</div>
-      <div class="li"><div style="width:10px;height:10px;border-radius:50%;border:2px solid #b8a000;background:#161b22"></div> 일반역</div>
-    </div>
-    <div class="map-wrap" id="mapWrap">
-      <div class="track-label-up">상행 →</div>
-      <div class="track-label-down">← 하행</div>
-      <div class="track-up"></div>
-      <div class="track-down"></div>
-      <div class="stations-row" id="stationsRow"></div>
-      <div id="trainMarkers"></div>
+  <!-- 헤더 -->
+  <div id="header">
+    <div class="logo-badge">9</div>
+    <div class="app-title">9호선 기관사 앱</div>
+    <div class="status-pill">
+      <div class="pulse" id="statusDot"></div>
+      <span id="statusTxt">운행중</span>
     </div>
   </div>
 
-  <div id="listView" style="display:none">
-    <div class="info-box">💡 아래는 시뮬레이션 기반 도착 예정 정보입니다. 실제 도착 시간과 다를 수 있습니다.</div>
-    <div class="station-grid" id="stationGrid"></div>
+  <!-- 탭바 -->
+  <div id="tabBar">
+    <button class="tab-btn active" onclick="switchPage('map')" id="tab-map">
+      <div class="tab-icon">🗺</div>노선도
+    </button>
+    <button class="tab-btn" onclick="switchPage('gap')" id="tab-gap">
+      <div class="tab-icon">📏</div>간격
+    </button>
+    <button class="tab-btn" onclick="switchPage('pdf')" id="tab-pdf">
+      <div class="tab-icon">📋</div>매뉴얼
+    </button>
+  </div>
+
+  <!-- 페이지 영역 -->
+  <div id="pages">
+
+    <!-- ── PAGE 1: 실시간 노선도 ── -->
+    <div class="page active" id="mapPage">
+
+      <!-- 요약 카드 -->
+      <div class="summary-strip">
+        <div class="s-card">
+          <div class="s-val" id="sumTrains">18</div>
+          <div class="s-label">운행 열차</div>
+        </div>
+        <div class="s-card">
+          <div class="s-val green" id="sumFront">-</div>
+          <div class="s-label">전방 간격</div>
+        </div>
+        <div class="s-card">
+          <div class="s-val blue" id="sumRear">-</div>
+          <div class="s-label">후방 간격</div>
+        </div>
+      </div>
+
+      <!-- 내 열차 간격 패널 -->
+      <div class="gap-panel">
+        <div class="gap-panel-title">🚇 내 열차 기준 간격</div>
+        <div class="gap-row">
+          <div class="gap-box" id="frontBox">
+            <div class="gap-dir">← 전방 열차</div>
+            <div class="gap-time" id="frontTime">--</div>
+            <div class="gap-stn" id="frontStn">--</div>
+            <div class="gap-stations" id="frontStns">--</div>
+          </div>
+          <div>
+            <div class="gap-me">
+              <div class="gap-me-badge">내 열차</div>
+              <div class="gap-me-stn" id="myStnName">--</div>
+            </div>
+            <div class="gap-arrow" style="margin-top:4px">◀ ▶</div>
+          </div>
+          <div class="gap-box" id="rearBox">
+            <div class="gap-dir">후방 열차 →</div>
+            <div class="gap-time" id="rearTime">--</div>
+            <div class="gap-stn" id="rearStn">--</div>
+            <div class="gap-stations" id="rearStns">--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 범례 -->
+      <div class="legend">
+        <div class="li"><div class="lb" style="background:var(--up)"></div>상행</div>
+        <div class="li"><div class="lb" style="background:var(--down)"></div>하행</div>
+        <div class="li"><div class="lb" style="background:var(--red)"></div>급행</div>
+        <div class="li"><div style="width:10px;height:10px;border-radius:50%;background:var(--gold)"></div>급행역</div>
+        <div class="li" style="margin-left:auto;font-size:9px;color:var(--txt3)" id="lastUpd">갱신중...</div>
+      </div>
+
+      <!-- 노선도 -->
+      <div class="map-scroll">
+        <div class="map-wrap" id="mapWrap">
+          <div class="track-lbl-up">상행 →</div>
+          <div class="track-lbl-dn">← 하행</div>
+          <div class="track-up"></div>
+          <div class="track-down"></div>
+          <div class="stations-row" id="stationsRow"></div>
+          <div id="trainMarkers"></div>
+        </div>
+      </div>
+
+      <!-- 도착정보 -->
+      <div class="section-head">주요역 도착정보</div>
+      <div class="arrival-grid" id="arrivalGrid"></div>
+    </div>
+
+    <!-- ── PAGE 2: 간격 상세 ── -->
+    <div class="page" id="gapPage">
+      <div class="gap-detail-title">전체 열차 간격 현황</div>
+      <div class="gap-warn-bar" id="gapWarnBar">⚠️ <span id="gapWarnMsg"></span></div>
+      <div id="gapList"></div>
+    </div>
+
+    <!-- ── PAGE 3: PDF 매뉴얼 ── -->
+    <div class="page" id="pdfPage" style="display:none;flex-direction:column">
+      <div class="pdf-toolbar">
+        <div class="pdf-search-wrap">
+          <input class="pdf-search" id="pdfSearchInput" placeholder="키워드 검색 (예: 브레이크 고장, 화재 조치)" 
+            onkeydown="if(event.key==='Enter')searchPdf()"/>
+          <button class="search-btn" onclick="searchPdf()">검색</button>
+        </div>
+        <div class="pdf-file-tabs" id="pdfFileTabs">
+          <div class="pdf-ftab active" data-idx="-1" onclick="selectPdfFile(-1)">전체</div>
+        </div>
+      </div>
+      <div class="pdf-results" id="pdfResults">
+        <div class="pdf-empty">
+          <div class="pdf-empty-icon">📄</div>
+          <div class="pdf-empty-title">PDF 매뉴얼을 등록하세요</div>
+          <div class="pdf-empty-desc">아래 + 버튼으로 고장 조치 매뉴얼 PDF를 추가하면<br>앱 실행 시 자동으로 로드되어 검색할 수 있습니다</div>
+          <br>
+          <button class="search-btn" onclick="document.getElementById('pdfUpload').click()">+ PDF 추가</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /pages -->
+
+</div><!-- /app -->
+
+<!-- PDF 뷰어 (풀스크린 오버레이) -->
+<div class="pdf-viewer-wrap" id="pdfViewer">
+  <div class="pdf-viewer-header">
+    <button class="pdf-viewer-back" onclick="closePdfViewer()">← 닫기</button>
+    <div class="pdf-viewer-title" id="pdfViewerTitle"></div>
+    <div class="pdf-viewer-page" id="pdfViewerPageInfo"></div>
+  </div>
+  <div class="pdf-canvas-wrap" id="pdfCanvasWrap"></div>
+  <div class="pdf-nav">
+    <button class="pdf-nav-btn" id="prevPageBtn" onclick="changePdfPage(-1)">◀ 이전</button>
+    <span style="font-size:12px;color:var(--txt2)" id="pdfPageLabel">1 / 1</span>
+    <button class="pdf-nav-btn" id="nextPageBtn" onclick="changePdfPage(1)">다음 ▶</button>
   </div>
 </div>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <div style="font-size:13px;color:var(--txt2)">PDF 분석 중...</div>
+  </div>
+</div>
+
+<input type="file" id="pdfUpload" accept=".pdf" multiple onchange="handlePdfUpload(event)"/>
 
 <script>
+// ══════════════════════════════════════════════
+//  9호선 역 데이터
+// ══════════════════════════════════════════════
 const STATIONS = [
   {n:'개화',c:'9001',e:true},{n:'김포공항',c:'9002',e:true},{n:'공항시장',c:'9003',e:false},
   {n:'신방화',c:'9004',e:false},{n:'마곡나루',c:'9005',e:true},{n:'양천향교',c:'9006',e:false},
@@ -153,268 +381,570 @@ const STATIONS = [
   {n:'둔촌오륜',c:'9037',e:false},{n:'중앙보훈병원',c:'9038',e:true}
 ];
 
-// 시뮬레이션 열차 상태
+// ══════════════════════════════════════════════
+//  시뮬레이션 상태
+// ══════════════════════════════════════════════
+const MY_TRAIN_ID = 'U1'; // 내 열차 ID
 let simTrains = [];
 let simTimer = null;
-let autoTimer = null;
-let autoOn = false;
-let currentTab = 'map';
-let simMode = true;
+const N = STATIONS.length;
 
-function initSimTrains() {
+function initSim() {
   simTrains = [];
-  const N = STATIONS.length;
-  // 상행 열차 9대
-  const upPositions = [0,4,8,12,16,20,24,28,33];
-  upPositions.forEach((pos,i) => {
-    const isExpress = i % 3 === 0;
+  // 상행 9대
+  [0,4,8,12,16,20,24,28,33].forEach((pos,i) => {
     simTrains.push({
-      id: 'U'+(i+1), dir:'up', pos: pos + Math.random()*0.8,
-      express: isExpress, num: `90${10+i}`, speed: isExpress ? 0.07 : 0.04
+      id:'U'+(i+1), dir:'up', pos:pos+Math.random()*.5,
+      express:i%3===0, num:`90${10+i}`, speed:i%3===0?.065:.038
     });
   });
-  // 하행 열차 9대
-  const downPositions = [2,6,10,14,18,22,26,30,35];
-  downPositions.forEach((pos,i) => {
-    const isExpress = i % 3 === 0;
+  // 하행 9대
+  [2,6,10,14,18,22,26,30,35].forEach((pos,i) => {
     simTrains.push({
-      id: 'D'+(i+1), dir:'down', pos: pos + Math.random()*0.8,
-      express: isExpress, num: `91${10+i}`, speed: isExpress ? 0.07 : 0.04
+      id:'D'+(i+1), dir:'down', pos:pos+Math.random()*.5,
+      express:i%3===0, num:`91${10+i}`, speed:i%3===0?.065:.038
     });
   });
 }
 
 function stepSim() {
-  const N = STATIONS.length - 1;
   simTrains.forEach(t => {
-    if (t.dir === 'up') {
-      t.pos += t.speed;
-      if (t.pos > N) t.pos = 0;
+    if(t.dir==='up'){
+      t.pos+=t.speed;
+      if(t.pos>=N-1) t.pos=0;
     } else {
-      t.pos -= t.speed;
-      if (t.pos < 0) t.pos = N;
+      t.pos-=t.speed;
+      if(t.pos<=0) t.pos=N-1;
     }
   });
   renderMap();
-  if (currentTab === 'list') renderList();
+  updateGapPanel();
+  if(document.getElementById('gapPage').classList.contains('active')) renderGapPage();
+  document.getElementById('lastUpd').textContent='갱신: '+new Date().toLocaleTimeString('ko-KR');
 }
 
+// ══════════════════════════════════════════════
+//  노선도 렌더
+// ══════════════════════════════════════════════
 function renderStations() {
-  const row = document.getElementById('stationsRow');
-  row.innerHTML = STATIONS.map((s,i) => `
+  document.getElementById('stationsRow').innerHTML = STATIONS.map((s,i)=>`
     <div class="stn ${s.e?'express':''}" id="stn_${i}">
-      <div class="stn-name">${s.n}</div>
+      <div class="stn-name ${s.e?'express':''}">${s.n}</div>
       <div class="stn-circle"></div>
       <div class="stn-bottom"></div>
-    </div>
-  `).join('');
+    </div>`).join('');
 }
 
 function getStationX(idx) {
   const wrap = document.getElementById('mapWrap');
   const nodes = document.querySelectorAll('.stn');
-  if (!nodes[idx]) return 0;
-  const wrapRect = wrap.getBoundingClientRect();
-  const nodeRect = nodes[idx].getBoundingClientRect();
-  return nodeRect.left - wrapRect.left + nodeRect.width/2;
+  if(!nodes[idx]) return 0;
+  const wr = wrap.getBoundingClientRect();
+  const nr = nodes[idx].getBoundingClientRect();
+  return nr.left - wr.left + nr.width/2;
 }
 
 function renderMap() {
   const markers = document.getElementById('trainMarkers');
-  markers.innerHTML = '';
-  const wrap = document.getElementById('mapWrap');
-
-  simTrains.forEach(t => {
-    const idxF = Math.floor(t.pos);
-    const idxC = Math.min(idxF+1, STATIONS.length-1);
-    const frac = t.pos - idxF;
-    const x1 = getStationX(idxF);
-    const x2 = getStationX(idxC);
-    const x = x1 + (x2-x1)*frac;
-
-    const isUp = t.dir === 'up';
-    const topPx = isUp ? 64 : 124;
-    const curStn = STATIONS[Math.round(t.pos)] || STATIONS[idxF];
-
-    const div = document.createElement('div');
-    div.className = 'train-marker';
-    div.style.left = (x - 13) + 'px';
-    div.style.top = topPx + 'px';
-    div.innerHTML = `
-      <div class="train-body ${isUp?'up':'down'} ${t.express?'express-t':''}">${isUp?'▶':'◀'}</div>
-      <div class="train-num">${t.num}</div>
-      <div class="train-tooltip">
-        🚇 ${t.num}<br>
-        ${isUp?'상행(개화→중앙보훈)':'하행(중앙보훈→개화)'}<br>
-        ${t.express?'🚄 급행':'일반'}<br>
-        현재: ${curStn.n}
-      </div>
-    `;
+  markers.innerHTML='';
+  simTrains.forEach(t=>{
+    const idxF=Math.floor(t.pos);
+    const idxC=Math.min(idxF+1,N-1);
+    const frac=t.pos-idxF;
+    const x=getStationX(idxF)+(getStationX(idxC)-getStationX(idxF))*frac;
+    const isUp=t.dir==='up';
+    const topPx=isUp?58:110;
+    const isMy=t.id===MY_TRAIN_ID;
+    const curStn=STATIONS[Math.round(t.pos)]||STATIONS[idxF];
+    const div=document.createElement('div');
+    div.className='train-marker';
+    div.style.left=(x-11)+'px';
+    div.style.top=topPx+'px';
+    div.innerHTML=`
+      <div class="train-body ${isUp?'up':'down'} ${t.express?'express-t':''} ${isMy?'my':''}">${isUp?'▶':'◀'}</div>
+      <div class="train-num ${isMy?'my':''}">${isMy?'🚇':t.num}</div>`;
     markers.appendChild(div);
   });
-
-  document.getElementById('lastUpd').textContent = '갱신: ' + new Date().toLocaleTimeString('ko-KR');
 }
 
-function getArrivalData() {
-  const result = {};
-  STATIONS.forEach((s, sIdx) => {
-    const arrivals = [];
-    simTrains.forEach(t => {
-      const isUp = t.dir === 'up';
-      let dist;
-      if (isUp) {
-        dist = sIdx - t.pos;
-        if (dist < 0) dist += STATIONS.length;
+// ══════════════════════════════════════════════
+//  간격 계산
+// ══════════════════════════════════════════════
+function calcGaps(myTrain) {
+  const myPos = myTrain.pos;
+  const myDir = myTrain.dir;
+  const sameDir = simTrains.filter(t=>t.id!==MY_TRAIN_ID && t.dir===myDir);
+
+  let frontTrain=null, frontDist=Infinity;
+  let rearTrain=null, rearDist=Infinity;
+
+  sameDir.forEach(t=>{
+    let d;
+    if(myDir==='up'){
+      // 상행: 위치가 큰 쪽이 전방(선행)
+      d=t.pos-myPos;
+      if(d<0) d+=N;
+      if(d<frontDist){frontDist=d;frontTrain=t;}
+      // 후방
+      const dr=myPos-t.pos;
+      const dr2=dr<0?dr+N:dr;
+      if(dr2<rearDist){rearDist=dr2;rearTrain=t;}
+    } else {
+      // 하행: 위치가 작은 쪽이 전방
+      d=myPos-t.pos;
+      if(d<0) d+=N;
+      if(d<frontDist){frontDist=d;frontTrain=t;}
+      const dr=t.pos-myPos;
+      const dr2=dr<0?dr+N:dr;
+      if(dr2<rearDist){rearDist=dr2;rearTrain=t;}
+    }
+  });
+
+  // 실질적 전방/후방 분리 (같은 방향 열차 중 정말 앞/뒤)
+  let realFront=null, realFrontD=Infinity;
+  let realRear=null, realRearD=Infinity;
+  sameDir.forEach(t=>{
+    if(myDir==='up'){
+      let d=t.pos-myPos; if(d<=0) d+=N;
+      if(d<N/2 && d<realFrontD){realFrontD=d;realFront=t;}
+      let dr=myPos-t.pos; if(dr<=0) dr+=N;
+      if(dr<N/2 && dr<realRearD){realRearD=dr;realRear=t;}
+    } else {
+      let d=myPos-t.pos; if(d<=0) d+=N;
+      if(d<N/2 && d<realFrontD){realFrontD=d;realFront=t;}
+      let dr=t.pos-myPos; if(dr<=0) dr+=N;
+      if(dr<N/2 && dr<realRearD){realRearD=dr;realRear=t;}
+    }
+  });
+
+  function distToTime(d){ return Math.round(d/0.04*0.8); }
+  function distToStations(d){ return Math.max(0,Math.round(d)); }
+
+  return {
+    front: realFront ? {train:realFront, sec:distToTime(realFrontD), stns:distToStations(realFrontD)} : null,
+    rear:  realRear  ? {train:realRear,  sec:distToTime(realRearD),  stns:distToStations(realRearD)}  : null
+  };
+}
+
+function secToStr(sec){
+  if(sec<60) return sec+'초';
+  const m=Math.floor(sec/60), s=sec%60;
+  return s>0?`${m}분${s}초`:`${m}분`;
+}
+
+function timeClass(sec){
+  if(sec<90) return 'warn';
+  if(sec<180) return 'caution';
+  return 'ok';
+}
+
+function updateGapPanel() {
+  const my = simTrains.find(t=>t.id===MY_TRAIN_ID);
+  if(!my) return;
+  const myIdx=Math.round(my.pos);
+  document.getElementById('myStnName').textContent=STATIONS[Math.min(myIdx,N-1)].n;
+
+  const g=calcGaps(my);
+
+  if(g.front){
+    const cls=timeClass(g.front.sec);
+    const fi=document.getElementById('frontBox');
+    fi.className='gap-box '+cls;
+    document.getElementById('frontTime').className='gap-time '+cls;
+    document.getElementById('frontTime').textContent=secToStr(g.front.sec);
+    document.getElementById('frontStn').textContent=STATIONS[Math.min(Math.round(g.front.train.pos),N-1)].n;
+    document.getElementById('frontStns').textContent=g.front.stns+'역 앞';
+    document.getElementById('sumFront').textContent=secToStr(g.front.sec);
+    document.getElementById('sumFront').className='s-val '+cls;
+  }
+  if(g.rear){
+    const cls=timeClass(g.rear.sec);
+    const ri=document.getElementById('rearBox');
+    ri.className='gap-box '+cls;
+    document.getElementById('rearTime').className='gap-time '+cls;
+    document.getElementById('rearTime').textContent=secToStr(g.rear.sec);
+    document.getElementById('rearStn').textContent=STATIONS[Math.min(Math.round(g.rear.train.pos),N-1)].n;
+    document.getElementById('rearStns').textContent=g.rear.stns+'역 뒤';
+    document.getElementById('sumRear').textContent=secToStr(g.rear.sec);
+    document.getElementById('sumRear').className='s-val blue';
+  }
+}
+
+// ══════════════════════════════════════════════
+//  간격 상세 페이지
+// ══════════════════════════════════════════════
+function renderGapPage() {
+  const list=document.getElementById('gapList');
+  const warnBar=document.getElementById('gapWarnBar');
+  let warnCount=0;
+
+  const rows = simTrains.map(t=>{
+    const isUp=t.dir==='up';
+    const sameDir=simTrains.filter(o=>o.id!==t.id&&o.dir===t.dir);
+    let frontD=Infinity, rearD=Infinity;
+    sameDir.forEach(o=>{
+      if(isUp){
+        let d=o.pos-t.pos; if(d<=0)d+=N;
+        if(d<N/2&&d<frontD)frontD=d;
+        let dr=t.pos-o.pos; if(dr<=0)dr+=N;
+        if(dr<N/2&&dr<rearD)rearD=dr;
       } else {
-        dist = t.pos - sIdx;
-        if (dist < 0) dist += STATIONS.length;
-      }
-      if (dist > 0 && dist < 6) {
-        const sec = Math.round(dist / t.speed * 0.8);
-        arrivals.push({ dir: isUp?'상행':'하행', sec, num: t.num, express: t.express });
+        let d=t.pos-o.pos; if(d<=0)d+=N;
+        if(d<N/2&&d<frontD)frontD=d;
+        let dr=o.pos-t.pos; if(dr<=0)dr+=N;
+        if(dr<N/2&&dr<rearD)rearD=dr;
       }
     });
-    arrivals.sort((a,b) => a.sec - b.sec);
-    result[s.n] = arrivals.slice(0,4);
-  });
-  return result;
+    const fSec=Math.round(frontD===Infinity?999:frontD/0.04*.8);
+    const rSec=Math.round(rearD===Infinity?999:rearD/0.04*.8);
+    const fStns=Math.max(0,Math.round(frontD===Infinity?0:frontD));
+    const rStns=Math.max(0,Math.round(rearD===Infinity?0:rearD));
+    if(fSec<90||rSec<90) warnCount++;
+    const isMy=t.id===MY_TRAIN_ID;
+    const dirCls=isUp?'up':'down';
+    const dirTxt=isUp?'상행':'하행';
+    const stnNow=STATIONS[Math.min(Math.round(t.pos),N-1)].n;
+    return `<div class="gap-train-card" style="${isMy?'border-color:var(--gold)':''}">
+      <div class="gtc-head">
+        <div class="gtc-num" style="${isMy?'color:var(--gold)':''}">
+          ${isMy?'🚇 내 열차 — ':''}${t.num} (${stnNow})
+        </div>
+        <span class="gtc-type ${dirCls} ${t.express?'express':''}">${dirTxt}${t.express?' 급행':''}</span>
+      </div>
+      <div class="gap-metrics">
+        <div class="gm-box">
+          <div class="gm-val" style="color:${fSec<90?'var(--red)':fSec<180?'var(--orange)':'var(--green)'}">${fSec>=999?'-':secToStr(fSec)}</div>
+          <div class="gm-lab">전방 시간</div>
+        </div>
+        <div class="gm-box">
+          <div class="gm-val" style="color:${fSec<90?'var(--red)':fSec<180?'var(--orange)':'var(--green)'}">${fStns>=30?'-':fStns+'역'}</div>
+          <div class="gm-lab">전방 간격</div>
+        </div>
+        <div class="gm-box">
+          <div class="gm-val" style="color:var(--down)">${rSec>=999?'-':secToStr(rSec)}</div>
+          <div class="gm-lab">후방 시간</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  list.innerHTML=rows;
+  if(warnCount>0){
+    warnBar.classList.add('show');
+    document.getElementById('gapWarnMsg').textContent=`간격 주의 열차 ${warnCount}대 — 90초 미만 근접 운행`;
+  } else {
+    warnBar.classList.remove('show');
+  }
 }
 
-function renderList() {
-  const data = getArrivalData();
-  document.getElementById('stationGrid').innerHTML = STATIONS.map(s => {
-    const arr = data[s.n] || [];
-    const items = arr.length ? arr.map(a => {
-      const min = Math.floor(a.sec/60), sec2 = a.sec%60;
-      const cls = a.sec<60?'soon':a.sec<180?'med':'ok';
-      const t = a.sec<60?'곧 도착':`${min}분 ${sec2}초`;
-      return `<div class="arrival-item">
-        <span class="adir">${a.dir==='상행'?'→상행':'←하행'}</span>
-        <span class="atrain">${a.num}${a.express?' 급행':''}</span>
-        <span class="atime ${cls}">${t}</span>
+// ══════════════════════════════════════════════
+//  도착정보 렌더 (주요역)
+// ══════════════════════════════════════════════
+function renderArrival() {
+  const KEY_STNS=[0,4,6,12,14,16,19,22,24,29];
+  const grid=document.getElementById('arrivalGrid');
+  grid.innerHTML=KEY_STNS.map(si=>{
+    const s=STATIONS[si];
+    const arrivals=[];
+    simTrains.forEach(t=>{
+      const isUp=t.dir==='up';
+      let dist;
+      if(isUp){dist=si-t.pos;if(dist<0)dist+=N;}
+      else{dist=t.pos-si;if(dist<0)dist+=N;}
+      if(dist>0&&dist<5){
+        const sec=Math.round(dist/t.speed*.8);
+        arrivals.push({dir:isUp?'→상행':'←하행',sec,num:t.num,express:t.express});
+      }
+    });
+    arrivals.sort((a,b)=>a.sec-b.sec);
+    const items=arrivals.slice(0,3).map(a=>{
+      const cls=a.sec<60?'soon':a.sec<180?'med':'ok';
+      return `<div class="a-item">
+        <span class="a-dir">${a.dir}</span>
+        <span class="a-time ${cls}">${secToStr(a.sec)}</span>
       </div>`;
-    }).join('') : '<div style="color:#8b949e;font-size:11px;padding:4px">잠시 후 도착 예정</div>';
-    return `<div class="scard">
-      <h3>${s.n}${s.e?'<span class="ebadge">급행</span>':''}</h3>
-      ${items}
-    </div>`;
+    }).join('')||`<div class="a-item"><span class="a-dir" style="color:var(--txt3)">접근 없음</span></div>`;
+    return `<div class="a-card">
+      <div class="a-card-head">
+        <div class="a-card-name">${s.n}</div>
+        ${s.e?'<span class="exp-badge">급행</span>':''}
+      </div>${items}</div>`;
   }).join('');
 }
 
-function startSim() {
-  simMode = true;
-  clearInterval(simTimer);
-  initSimTrains();
-  renderStations();
-  setTimeout(() => {
-    renderMap();
-    renderList();
-    simTimer = setInterval(stepSim, 800);
-  }, 100);
-  document.getElementById('modeBadge').textContent = '🟢 시뮬레이션';
-  document.getElementById('modeBadge').style.cssText = 'background:#1f4a1f;color:#3fb950;border:1px solid #3fb950;font-size:11px;padding:3px 8px;border-radius:12px;margin-left:4px';
-  document.getElementById('statusText').textContent = '시뮬레이션 모드 — 열차 '+simTrains.length+'대 운행 중';
-  document.getElementById('statusDot').className = 'dot';
-  document.getElementById('simBtn').className = 'btn sec active';
+// ══════════════════════════════════════════════
+//  PDF 매뉴얼 시스템
+// ══════════════════════════════════════════════
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let pdfFiles=[];       // {name, doc, pages:[{num,text}]}
+let selectedFileIdx=-1;// -1=전체
+let lastSearchTerm='';
+let viewerDoc=null;
+let viewerPage=1;
+let viewerTotalPages=1;
+let viewerFileName='';
+
+// IndexedDB로 PDF 영속 저장
+const DB_NAME='line9manual_db', DB_VER=1, STORE='pdfs';
+let db=null;
+function openDB(){
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(DB_NAME,DB_VER);
+    req.onupgradeneeded=e=>e.target.result.createObjectStore(STORE,{keyPath:'name'});
+    req.onsuccess=e=>{db=e.target.result;res(db);};
+    req.onerror=e=>rej(e);
+  });
+}
+async function saveToDB(name,data){
+  if(!db) await openDB();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(STORE,'readwrite');
+    tx.objectStore(STORE).put({name,data});
+    tx.oncomplete=res; tx.onerror=rej;
+  });
+}
+async function getAllFromDB(){
+  if(!db) await openDB();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(STORE,'readonly');
+    const req=tx.objectStore(STORE).getAll();
+    req.onsuccess=e=>res(e.target.result);
+    req.onerror=rej;
+  });
+}
+async function deleteFromDB(name){
+  if(!db) await openDB();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(STORE,'readwrite');
+    tx.objectStore(STORE).delete(name);
+    tx.oncomplete=res; tx.onerror=rej;
+  });
 }
 
-async function loadReal() {
-  const key = document.getElementById('apiKeyInput').value.trim();
-  if (!key) { showErr('API 키를 입력해주세요'); return; }
-  clearInterval(simTimer);
-  simMode = false;
-  document.getElementById('statusText').textContent = '실제 API 조회 중...';
-  document.getElementById('statusDot').className = 'dot off';
-  hideErr();
+async function loadPdfFromData(name, arrayBuffer) {
+  const data=new Uint8Array(arrayBuffer);
+  const doc=await pdfjsLib.getDocument({data}).promise;
+  const pages=[];
+  for(let i=1;i<=doc.numPages;i++){
+    const pg=await doc.getPage(i);
+    const content=await pg.getTextContent();
+    const text=content.items.map(it=>it.str).join(' ');
+    pages.push({num:i,text});
+  }
+  return {name,doc,pages};
+}
 
-  const PROXIES = [
-    'https://corsproxy.io/?',
-    'https://api.allorigins.win/raw?url='
-  ];
-  async function fetchP(url) {
-    for (const p of PROXIES) {
-      try {
-        const r = await fetch(p + encodeURIComponent(url));
-        if (!r.ok) continue;
-        return await r.json();
-      } catch(e) { continue; }
+async function handlePdfUpload(event) {
+  const files=[...event.target.files];
+  if(!files.length) return;
+  document.getElementById('loadingOverlay').classList.add('show');
+  for(const file of files){
+    const alreadyExists=pdfFiles.find(p=>p.name===file.name);
+    if(alreadyExists) continue;
+    const ab=await file.arrayBuffer();
+    const pdfObj=await loadPdfFromData(file.name,ab);
+    pdfFiles.push(pdfObj);
+    await saveToDB(file.name,ab);
+  }
+  document.getElementById('loadingOverlay').classList.remove('show');
+  event.target.value='';
+  rebuildFileTabs();
+  updatePdfResultsArea();
+}
+
+async function loadSavedPdfs(){
+  try{
+    const saved=await getAllFromDB();
+    if(!saved||!saved.length) return;
+    document.getElementById('loadingOverlay').classList.add('show');
+    for(const item of saved){
+      const pdfObj=await loadPdfFromData(item.name,item.data);
+      pdfFiles.push(pdfObj);
     }
-    throw new Error('서버 연결 실패 — 시뮬레이션 모드를 이용해주세요');
-  }
-
-  try {
-    const url = `https://swopenapi.seoul.go.kr/api/subway/${key}/json/realtimePosition/0/100/${encodeURIComponent('9호선')}`;
-    const json = await fetchP(url);
-    if (json.errorMessage?.status >= 400) throw new Error(json.errorMessage.message);
-    const trains = json.realtimePositionList || [];
-
-    // 실제 데이터로 simTrains 덮어쓰기
-    simTrains = trainData;
-
-    // 도착정보 렌더링 (실제 API 데이터 기반)
-    const grid = document.getElementById('stationGrid');
-    grid.innerHTML = STATIONS.map(s => {
-      const arr = arrivalData[s.n] || [];
-      const items = arr.length ? arr.slice(0,4).map(a => {
-        const sec = parseInt(a.barvlDt || 0);
-        const min = Math.floor(sec/60);
-        const cls = sec < 60 ? 'soon' : sec < 180 ? 'med' : 'ok';
-        const timeStr = sec < 30 ? a.arvlMsg2 : `${min}분 후`;
-        const dir = a.updnLine === '하행' ? '←하행' : '→상행';
-        return `<div class="arrival-item">
-          <span class="adir">${dir}</span>
-          <span class="atrain">${a.btrainNo} ${a.btrainSttus==='급행'?'🔴급행':''}</span>
-          <span class="atime ${cls}">${timeStr}</span>
-        </div>`;
-      }).join('') : '<div style="color:#8b949e;font-size:11px;padding:4px">운행 정보 없음</div>';
-      return `<div class="scard">
-        <h3>${s.n}${s.e?'<span class="ebadge">급행</span>':''}</h3>
-        ${items}
-      </div>`;
-    }).join('');
-
-    renderMap();
-    document.getElementById('modeBadge').textContent = '🔵 실시간 API';
-    document.getElementById('modeBadge').style.cssText = 'background:#1a2d4a;color:#79aef0;border:1px solid #79aef0;font-size:11px;padding:3px 8px;border-radius:12px;margin-left:4px';
-    document.getElementById('statusText').textContent = `실제 데이터 — 9호선 열차 ${trainData.length}대 운행 중`;
-    document.getElementById('statusDot').className = 'dot';
-    document.getElementById('listMessage') && (document.getElementById('listMessage').style.display='none');
-  } catch(e) {
-    showErr(e.message);
-    document.getElementById('statusDot').className = 'dot off';
-    document.getElementById('statusText').textContent = '오류 발생';
+    document.getElementById('loadingOverlay').classList.remove('show');
+    rebuildFileTabs();
+    updatePdfResultsArea();
+  }catch(e){
+    document.getElementById('loadingOverlay').classList.remove('show');
   }
 }
 
-function toggleAuto() {
-  autoOn = !autoOn;
-  const btn = document.getElementById('autoBtn');
-  if (autoOn) {
-    autoTimer = setInterval(() => { if (!simMode) loadReal(); }, 30000);
-    btn.textContent = '⏹ 자동갱신 중'; btn.className = 'btn sec active';
-    document.getElementById('autoStat').textContent = '30초마다 갱신';
+function rebuildFileTabs(){
+  const tabs=document.getElementById('pdfFileTabs');
+  tabs.innerHTML=`<div class="pdf-ftab ${selectedFileIdx===-1?'active':''}" data-idx="-1" onclick="selectPdfFile(-1)">전체</div>`
+    +pdfFiles.map((p,i)=>`
+      <div class="pdf-ftab ${selectedFileIdx===i?'active':''}" data-idx="${i}" onclick="selectPdfFile(${i})">
+        📄 ${p.name.replace('.pdf','')}
+      </div>`).join('')
+    +`<div class="pdf-add-btn" onclick="document.getElementById('pdfUpload').click()">+ 추가</div>`;
+}
+
+function selectPdfFile(idx){
+  selectedFileIdx=idx;
+  rebuildFileTabs();
+  if(lastSearchTerm) searchPdf();
+  else updatePdfResultsArea();
+}
+
+function updatePdfResultsArea(){
+  const res=document.getElementById('pdfResults');
+  if(!pdfFiles.length){
+    res.innerHTML=`<div class="pdf-empty">
+      <div class="pdf-empty-icon">📄</div>
+      <div class="pdf-empty-title">PDF 매뉴얼을 등록하세요</div>
+      <div class="pdf-empty-desc">+ 추가 버튼으로 고장 조치 매뉴얼 PDF를 추가하면<br>자동으로 저장되어 검색할 수 있습니다</div>
+      <br><button class="search-btn" onclick="document.getElementById('pdfUpload').click()">+ PDF 추가</button>
+    </div>`;
   } else {
-    clearInterval(autoTimer);
-    btn.textContent = '⏱ 자동갱신'; btn.className = 'btn sec';
-    document.getElementById('autoStat').textContent = '';
+    res.innerHTML=`<div class="pdf-empty">
+      <div class="pdf-empty-icon">🔍</div>
+      <div class="pdf-empty-title">${pdfFiles.length}개 파일 로드됨</div>
+      <div class="pdf-empty-desc">키워드를 입력해서 매뉴얼 내용을 검색하세요</div>
+    </div>`;
   }
 }
 
-function switchTab(t) {
-  currentTab = t;
-  document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('active', (i===0&&t==='map')||(i===1&&t==='list')));
-  document.getElementById('mapView').style.display = t==='map'?'block':'none';
-  document.getElementById('listView').style.display = t==='list'?'block':'none';
-  if (t==='list') renderList();
+function searchPdf(){
+  const term=document.getElementById('pdfSearchInput').value.trim();
+  if(!term){updatePdfResultsArea();return;}
+  lastSearchTerm=term;
+  const res=document.getElementById('pdfResults');
+
+  if(!pdfFiles.length){
+    res.innerHTML=`<div class="no-results">등록된 PDF가 없습니다. + 추가 버튼으로 매뉴얼을 등록하세요.</div>`;
+    return;
+  }
+
+  const keywords=term.split(/\s+/).filter(Boolean);
+  const results=[];
+
+  const targetFiles=selectedFileIdx===-1?pdfFiles:[pdfFiles[selectedFileIdx]].filter(Boolean);
+
+  targetFiles.forEach(pf=>{
+    pf.pages.forEach(pg=>{
+      const txt=pg.text;
+      const lower=txt.toLowerCase();
+      const matched=keywords.every(kw=>lower.includes(kw.toLowerCase()));
+      if(matched){
+        // 하이라이트 스니펫 추출
+        const kw=keywords[0].toLowerCase();
+        const idx=lower.indexOf(kw);
+        const start=Math.max(0,idx-60);
+        const end=Math.min(txt.length,idx+120);
+        let snippet=txt.substring(start,end).trim();
+        keywords.forEach(k=>{
+          const re=new RegExp('('+k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');
+          snippet=snippet.replace(re,'<mark>$1</mark>');
+        });
+        if(start>0) snippet='...'+snippet;
+        if(end<txt.length) snippet+='...';
+        results.push({file:pf.name,page:pg.num,snippet,doc:pf.doc,fileName:pf.name});
+      }
+    });
+  });
+
+  if(!results.length){
+    res.innerHTML=`<div class="no-results">"${term}"에 대한 검색 결과가 없습니다.<br><span style="font-size:11px;color:var(--txt3)">다른 키워드로 검색해보세요</span></div>`;
+    return;
+  }
+
+  res.innerHTML=`<div class="result-count">"${term}" 검색결과 ${results.length}건</div>`
+    +results.map((r,ri)=>`
+    <div class="result-card" onclick="openPdfViewer(${ri})">
+      <div class="rc-head">
+        <span class="rc-file">📄 ${r.file.replace('.pdf','')}</span>
+        <span class="rc-page">p.${r.page}</span>
+      </div>
+      <div class="rc-text">${r.snippet}</div>
+    </div>`).join('');
+
+  // 결과 데이터 저장 (뷰어 오픈용)
+  window._searchResults=results;
 }
 
-function showErr(m) { const b=document.getElementById('errorBox'); b.style.display='block'; b.className='info-box'; b.style.borderColor='#f85149'; b.style.color='#f85149'; b.innerHTML='⚠️ '+m; }
-function hideErr() { document.getElementById('errorBox').style.display='none'; }
+function openPdfViewer(resultIdx){
+  const r=window._searchResults[resultIdx];
+  if(!r) return;
+  viewerDoc=r.doc;
+  viewerPage=r.page;
+  viewerTotalPages=r.doc.numPages;
+  viewerFileName=r.file;
+  document.getElementById('pdfViewerTitle').textContent=r.file.replace('.pdf','');
+  document.getElementById('pdfViewer').classList.add('show');
+  renderPdfPage();
+}
 
-// 초기화
-renderStations();
-setTimeout(startSim, 200);
+function closePdfViewer(){
+  document.getElementById('pdfViewer').classList.remove('show');
+}
+
+async function renderPdfPage(){
+  if(!viewerDoc) return;
+  const wrap=document.getElementById('pdfCanvasWrap');
+  wrap.innerHTML='<div style="color:var(--txt3);padding:20px;text-align:center">페이지 로딩 중...</div>';
+  document.getElementById('pdfPageLabel').textContent=`${viewerPage} / ${viewerTotalPages}`;
+  document.getElementById('prevPageBtn').disabled=viewerPage<=1;
+  document.getElementById('nextPageBtn').disabled=viewerPage>=viewerTotalPages;
+
+  const page=await viewerDoc.getPage(viewerPage);
+  const vw=Math.min(window.innerWidth-20, 600);
+  const viewport=page.getViewport({scale:vw/page.getViewport({scale:1}).width});
+  const canvas=document.createElement('canvas');
+  canvas.width=viewport.width;
+  canvas.height=viewport.height;
+  const ctx=canvas.getContext('2d');
+  await page.render({canvasContext:ctx,viewport}).promise;
+  wrap.innerHTML='';
+  wrap.appendChild(canvas);
+  wrap.scrollTop=0;
+}
+
+function changePdfPage(delta){
+  const newPage=viewerPage+delta;
+  if(newPage<1||newPage>viewerTotalPages) return;
+  viewerPage=newPage;
+  renderPdfPage();
+}
+
+// ══════════════════════════════════════════════
+//  탭 전환
+// ══════════════════════════════════════════════
+function switchPage(name){
+  document.querySelectorAll('.page').forEach(p=>{
+    p.classList.remove('active');
+    p.style.display='none';
+  });
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+
+  const pageEl=document.getElementById(name+'Page');
+  pageEl.style.display=(name==='pdf')?'flex':'block';
+  pageEl.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+
+  if(name==='gap') renderGapPage();
+}
+
+// ══════════════════════════════════════════════
+//  초기화
+// ══════════════════════════════════════════════
+async function init(){
+  renderStations();
+  initSim();
+  setTimeout(()=>{
+    renderMap();
+    updateGapPanel();
+    renderArrival();
+    simTimer=setInterval(()=>{
+      stepSim();
+      if(document.getElementById('mapPage').classList.contains('active')) renderArrival();
+    },900);
+  },150);
+  await openDB();
+  await loadSavedPdfs();
+}
+
+init();
 </script>
 </body>
 </html>
