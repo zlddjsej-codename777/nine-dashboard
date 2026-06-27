@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     const response = await fetch(url, {
       headers: { 'Accept': 'application/json' },
       // Vercel 함수 타임아웃 대비
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(18000),
     });
 
     const data = await response.json().catch(() => null);
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
     return res.status(200).json(data);
 
   } catch (err) {
-    if (err.name === 'TimeoutError') {
+    if (err.name === 'TimeoutError' || err.name === 'AbortError') {
       return res.status(504).json({ error: '서울 API 응답 시간 초과' });
     }
     return res.status(500).json({ error: err.message });
