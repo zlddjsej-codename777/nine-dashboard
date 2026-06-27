@@ -1,0 +1,91 @@
+package egovframework.com.opdata.together.notice.web;
+
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+
+public class ApiExplorer {
+	
+	public static void main(String[] args) throws IOException, Exception {
+		
+		// 초기 row 갯수를 가져오기 위한 셋팅합니다.
+		StringBuilder urlBuilder = new StringBuilder("42656476447a6c643634726e727647"); /*URL*/
+		//urlBuilder.append("/" +  URLEncoder.encode("sample","UTF-8") ); /*인증키 (sample사용시에는 호출시 제한됩니다.)*/
+		urlBuilder.append("/" +  URLEncoder.encode("486c7a6b737a6c643234714a584646","UTF-8") ); /*인증키 (sample사용시에는 호출시 제한됩니다.)*/
+		urlBuilder.append("/" +  URLEncoder.encode("xml","UTF-8") ); /*요청파일타입 (xml,xmlf,xls,json) */
+		urlBuilder.append("/" + URLEncoder.encode("RealtimeCityAir","UTF-8")); /*서비스명 (대소문자 구분 필수입니다.)*/
+		urlBuilder.append("/" + URLEncoder.encode("1","UTF-8")); /*요청시작위치 (sample인증키 사용시 5이내 숫자를 사용해야 합니다.)*/
+		//urlBuilder.append("/" + URLEncoder.encode("5","UTF-8")); /*요청종료위치(sample인증키 사용시 5이상 숫자 선택 안 됩니다.)*/
+		urlBuilder.append("/" + URLEncoder.encode("1000","UTF-8")); /*요청종료위치(sample인증키 사용시 5이상 숫자 선택 안 됩니다.)*/
+		// 상위 5개는 필수적으로 순서바꾸지 않고 호출해야 합니다.
+		
+		// 서비스별 추가 요청 인자이며 자세한 내용은 각 서비스별 api탭 - '요청인자'부분에 자세히 나와 있습니다.
+		// 요청 인자가 여러개일 경우, 필수 여부를 확인해 필수인 값은 무조건 넣어서 조회해야 합니다.
+		// 필수가 아닐 경우, 그리고 공백으로 처리해야할 경우 공백 대신 %20을 붙여 조회하시면 됩니다.
+		// ex) http://openapi.seoul.go.kr:8088/sample/xml/SeoulAdminMesure/1/5/%20/%20/%20/%20/향진
+		urlBuilder.append("/" + URLEncoder.encode("%20","UTF-8")); /* 서비스별 추가 요청인자들*/
+		urlBuilder.append("/" + URLEncoder.encode("중구","UTF-8")); /* 서비스별 추가 요청인자들*/
+		
+		// Xml 파싱해서 텍스트화 시키는 작업입니다.
+		DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+		DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+		Document dDocument = dBuilder.parse(urlBuilder.toString());
+		dDocument.getDocumentElement().normalize();
+		
+		// 측정일시
+		NodeList nList = dDocument.getElementsByTagName("MSRDT");
+		Node nNode = nList.item(0);
+		Element eElement = (Element) nNode;
+		System.out.println("파라미터 확인: " + eElement.getTextContent());
+		// 권역명
+		NodeList nList2 = dDocument.getElementsByTagName("MSRRGN_NM");
+		Node nNode2 = nList2.item(0);
+		Element eElement2 = (Element) nNode2;
+		
+		// 측정소명
+		NodeList nList3 = dDocument.getElementsByTagName("MSRSTE_NM");
+		Node nNode3 = nList3.item(0);
+		Element eElement3 = (Element) nNode3;
+		
+		// 통합대기환경등급
+		NodeList nList4 = dDocument.getElementsByTagName("IDEX_NM");
+		Node nNode4 = nList4.item(0);
+		Element eElement4 = (Element) nNode4;
+		
+		System.out.println(eElement.getTextContent() + " 기준"); 
+		System.out.println("(" + eElement2.getTextContent() + ")" + eElement3.getTextContent() + " 날씨는 " + eElement4.getTextContent() + "입니다.");
+		
+		URL url = new URL(urlBuilder.toString());
+		HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+		conn.setRequestMethod("GET");
+		conn.setRequestProperty("Content-type", "application/xml");
+		//System.out.println("Response code: " + conn.getResponseCode()); /* 연결 자체에 대한 확인이 필요하므로 추가합니다.*/
+		
+		BufferedReader rd;
+		// 서비스코드가 정상이면 200~300사이의 숫자가 나옵니다.
+		if(conn.getResponseCode() >= 200 && conn.getResponseCode() <= 300) {
+			rd = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+		} else {
+			rd = new BufferedReader(new InputStreamReader(conn.getErrorStream()));
+		}
+		StringBuilder sb = new StringBuilder();
+		String line;
+		while ((line = rd.readLine()) != null) {
+			sb.append(line);
+		}
+		rd.close();
+		conn.disconnect();
+		//System.out.println(sb.toString());
+	}
+}
