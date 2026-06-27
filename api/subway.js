@@ -11,15 +11,21 @@ export default async function handler(req, res) {
     return;
   }
 
-  const apiKey = process.env.api_key;
+  const apiKey = (process.env.api_key || process.env.API_KEY || process.env.SEOUL_API_KEY || '').trim();
   if (!apiKey) {
     return res.status(500).json({ error: 'API 키가 설정되지 않았습니다. Vercel 환경변수 api_key 를 확인하세요.' });
   }
 
   // 쿼리 파라미터
-  const { line = '9호선', start = 0, end = 100 } = req.query;
+  const { line = '9호선', start = '0', end = '100' } = req.query;
+  const startNo = Number.parseInt(start, 10);
+  const endNo = Number.parseInt(end, 10);
 
-  const url = `https://swopenapi.seoul.go.kr/api/subway/${apiKey}/json/realtimePosition/${start}/${end}/${encodeURIComponent(line)}`;
+  if (!Number.isFinite(startNo) || !Number.isFinite(endNo)) {
+    return res.status(400).json({ error: 'start/end 값이 올바르지 않습니다.' });
+  }
+
+  const url = `https://swopenapi.seoul.go.kr/api/subway/${apiKey}/json/realtimePosition/${startNo}/${endNo}/${encodeURIComponent(line)}`;
 
   try {
     const response = await fetch(url, {
@@ -28,14 +34,22 @@ export default async function handler(req, res) {
       signal: AbortSignal.timeout(8000),
     });
 
+    const data = await response.json().catch(() => null);
+
     if (!response.ok) {
-      return res.status(502).json({ error: `서울 API 오류: ${response.status}` });
+      return res.status(502).json({
+        error: `서울 API 오류: ${response.status}`,
+        detail: data?.errorMessage?.message || data?.message || null,
+      });
     }
 
-    const data = await response.json();
+    if (!data) {
+      return res.status(502).json({ error: '서울 API 응답을 읽을 수 없습니다.' });
+    }
 
     // 서울 API 에러 응답 처리
-    if (data.errorMessage && data.errorMessage.status >= 400) {
+    const apiStatus = String(data.errorMessage?.status || '');
+    if (data.errorMessage && apiStatus && apiStatus !== 'INFO-000') {
       return res.status(502).json({ error: data.errorMessage.message || '서울 API 오류' });
     }
 
