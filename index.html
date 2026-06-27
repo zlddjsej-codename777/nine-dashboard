@@ -212,8 +212,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
     <div class="app-title">9호선 기관사 앱</div>
     <div class="status-pill">
       <div class="pulse" id="statusDot"></div>
-      <span id="statusTxt">운행중</span>
+      <span id="statusTxt">연결중...</span>
     </div>
+    <div id="modeBadge" style="font-size:10px;padding:3px 8px;border-radius:10px;background:var(--bg3);color:var(--txt3);border:1px solid var(--bg4)">대기중</div>
   </div>
 
   <!-- 탭바 -->
@@ -926,20 +927,176 @@ function switchPage(name){
 }
 
 // ══════════════════════════════════════════════
+//  실제 API 연동 (Vercel 프록시 경유)
+// ══════════════════════════════════════════════
+let apiMode = false;      // true = 실제 API, false = 시뮬레이션
+let apiTimer = null;
+
+// 서울 지하철 열차번호 → 노선도 위치 매핑
+// API 응답의 statnId(현재역 코드)를 STATIONS 인덱스로 변환
+function statnIdToIdx(statnId) {
+  const code = String(statnId);
+  // 9호선 역코드는 9001~9038
+  const match = STATIONS.findIndex(s => s.c === code);
+  return match >= 0 ? match : -1;
+}
+
+async function fetchRealTrains() {
+  try {
+    const res = await fetch('/api/subway?line=9호선&start=0&end=100', {
+      signal: AbortSignal.timeout(7000)
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const list = data.realtimePositionList || [];
+    if (!list.length) throw new Error('운행 데이터 없음');
+
+    // API 응답을 simTrains 형식으로 변환
+    const converted = list.map((t, i) => {
+      const isUp = t.updnLine === '상행' || t.updnLine === '1';
+      const stnIdx = statnIdToIdx(t.statnId);
+      // 다음역 정보로 열차 위치를 역과 역 사이로 보정
+      const nextIdx = statnIdToIdx(t.statnNm2 ? t.statnId : t.statnId);
+      // 현재역 진입 여부에 따라 소수점 위치 조정 (0=출발직후, 0.8=도착직전)
+      const inOut = t.trainSttus === '2' ? 0.1 : 0.7; // 2=출발, 1=도착
+      const pos = stnIdx >= 0 ? stnIdx + inOut : i * 2;
+
+      return {
+        id: t.trainNo || ('T' + i),
+        dir: isUp ? 'up' : 'down',
+        pos: Math.min(pos, N - 1),
+        express: t.btrainSttus === '급행' || t.btrainSttus === '특급',
+        num: t.trainNo || ('열차' + i),
+        speed: 0,        // 실제 API 모드에서는 직접 이동 없음
+        statnNm: t.statnNm || '',
+      };
+    });
+
+    return converted;
+  } catch (e) {
+    console.warn('[API] 실패:', e.message);
+    return null;
+  }
+}
+
+function setModeBadge(mode) {
+  const badge = document.getElementById('modeBadge');
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusTxt');
+  if (mode === 'real') {
+    badge.textContent = '🔵 실시간';
+    badge.style.cssText = 'font-size:10px;padding:3px 8px;border-radius:10px;background:rgba(74,158,232,.2);color:#4A9EE8;border:1px solid #4A9EE8';
+    dot.className = 'pulse';
+    txt.textContent = '실시간 연동';
+  } else if (mode === 'sim') {
+    badge.textContent = '🟡 시뮬';
+    badge.style.cssText = 'font-size:10px;padding:3px 8px;border-radius:10px;background:rgba(200,166,0,.2);color:var(--gold);border:1px solid var(--gold-dim)';
+    dot.className = 'pulse';
+    txt.textContent = '시뮬레이션';
+  } else {
+    badge.textContent = '🔴 오프라인';
+    badge.style.cssText = 'font-size:10px;padding:3px 8px;border-radius:10px;background:rgba(240,78,78,.15);color:var(--red);border:1px solid var(--red)';
+    dot.className = 'pulse off';
+    txt.textContent = '연결 실패';
+  }
+}
+
+// 실제 API 데이터로 화면 갱신
+function applyRealTrains(trains) {
+  simTrains = trains;
+  renderMap();
+  updateGapPanel();
+  if (document.getElementById('mapPage').classList.contains('active')) renderArrival();
+  if (document.getElementById('gapPage').classList.contains('active')) renderGapPage();
+  document.getElementById('sumTrains').textContent = trains.length;
+  document.getElementById('lastUpd').textContent = '실시간 갱신: ' + new Date().toLocaleTimeString('ko-KR');
+}
+
+// 30초마다 실제 API 재호출
+async function startRealMode() {
+  clearInterval(simTimer);
+  clearInterval(apiTimer);
+  apiMode = true;
+
+  const trains = await fetchRealTrains();
+  if (trains) {
+    applyRealTrains(trains);
+    setModeBadge('real');
+  } else {
+    // 첫 호출 실패 → 시뮬레이션 폴백
+    startSimFallback();
+    return;
+  }
+
+  apiTimer = setInterval(async () => {
+    const fresh = await fetchRealTrains();
+    if (fresh) {
+      applyRealTrains(fresh);
+      setModeBadge('real');
+    } else {
+      setModeBadge('offline');
+    }
+  }, 30000);
+}
+
+// 시뮬레이션 폴백 (API 실패 시)
+function startSimFallback() {
+  apiMode = false;
+  setModeBadge('sim');
+  clearInterval(apiTimer);
+
+  initSim();
+  renderMap();
+  updateGapPanel();
+  renderArrival();
+
+  simTimer = setInterval(() => {
+    stepSim();
+    if (document.getElementById('mapPage').classList.contains('active')) renderArrival();
+  }, 900);
+}
+
+// ══════════════════════════════════════════════
 //  초기화
 // ══════════════════════════════════════════════
-async function init(){
+async function init() {
   renderStations();
+
+  // 우선 시뮬레이션으로 화면 즉시 표시 (로딩 공백 방지)
   initSim();
-  setTimeout(()=>{
+  setTimeout(async () => {
     renderMap();
     updateGapPanel();
     renderArrival();
-    simTimer=setInterval(()=>{
-      stepSim();
-      if(document.getElementById('mapPage').classList.contains('active')) renderArrival();
-    },900);
-  },150);
+
+    // 실제 API 시도
+    setModeBadge('sim');
+    const trains = await fetchRealTrains();
+    if (trains && trains.length > 0) {
+      // 성공 → 실시간 모드 전환
+      clearInterval(simTimer);
+      applyRealTrains(trains);
+      setModeBadge('real');
+      apiTimer = setInterval(async () => {
+        const fresh = await fetchRealTrains();
+        if (fresh && fresh.length > 0) {
+          applyRealTrains(fresh);
+          setModeBadge('real');
+        } else {
+          setModeBadge('offline');
+        }
+      }, 30000);
+    } else {
+      // 실패 → 시뮬레이션 계속
+      simTimer = setInterval(() => {
+        stepSim();
+        if (document.getElementById('mapPage').classList.contains('active')) renderArrival();
+      }, 900);
+    }
+  }, 150);
+
   await openDB();
   await loadSavedPdfs();
 }
