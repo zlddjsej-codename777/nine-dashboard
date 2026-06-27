@@ -23,7 +23,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 #header{background:var(--bg2);border-bottom:1.5px solid var(--gold);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
 .logo-badge{width:32px;height:32px;border-radius:50%;background:var(--gold);color:#000;font-weight:900;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .app-title{font-size:15px;font-weight:700;color:var(--gold);flex:1}
-.status-pill{display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--txt2)}
+.status-pill{display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--txt2);min-width:0;max-width:42vw}
+.status-pill span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pulse{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 1.5s infinite}
 .pulse.off{background:var(--red);animation:none}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
@@ -474,7 +475,7 @@ function renderMap() {
 function calcGaps(myTrain) {
   const myPos = myTrain.pos;
   const myDir = myTrain.dir;
-  const sameDir = simTrains.filter(t=>t.id!==MY_TRAIN_ID && t.dir===myDir);
+  const sameDir = simTrains.filter(t=>t.id!==myTrain.id && t.dir===myDir);
 
   let frontTrain=null, frontDist=Infinity;
   let rearTrain=null, rearDist=Infinity;
@@ -540,7 +541,7 @@ function timeClass(sec){
 }
 
 function updateGapPanel() {
-  const my = simTrains.find(t=>t.id===MY_TRAIN_ID);
+  const my = simTrains.find(t=>t.id===MY_TRAIN_ID) || simTrains[0];
   if(!my) return;
   const myIdx=Math.round(my.pos);
   document.getElementById('myStnName').textContent=STATIONS[Math.min(myIdx,N-1)].n;
@@ -934,21 +935,33 @@ let apiTimer = null;
 
 // 서울 지하철 열차번호 → 노선도 위치 매핑
 // API 응답의 statnId(현재역 코드)를 STATIONS 인덱스로 변환
-function statnIdToIdx(statnId) {
+function stationNameToIdx(name) {
+  if (!name) return -1;
+  const cleaned = String(name).replace(/\s/g, '').replace(/역$/, '');
+  return STATIONS.findIndex(s => s.n.replace(/\s/g, '') === cleaned);
+}
+
+function statnIdToIdx(statnId, statnName) {
   const code = String(statnId);
-  // 9호선 역코드는 9001~9038
-  const match = STATIONS.findIndex(s => s.c === code);
-  return match >= 0 ? match : -1;
+  const byExactCode = STATIONS.findIndex(s => s.c === code);
+  if (byExactCode >= 0) return byExactCode;
+
+  // 서울 API가 1009000901 같은 전체 역 ID를 내려주는 경우 마지막 4자리로 매칭
+  const byTailCode = STATIONS.findIndex(s => code.endsWith(s.c));
+  if (byTailCode >= 0) return byTailCode;
+
+  return stationNameToIdx(statnName);
 }
 
 async function fetchRealTrains() {
   try {
-    const res = await fetch('/api/subway?line=9호선&start=0&end=100', {
+    const params = new URLSearchParams({ line: '9호선', start: '0', end: '100' });
+    const res = await fetch(`/api/subway?${params.toString()}`, {
       signal: AbortSignal.timeout(7000)
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+    if (data.error) throw new Error(data.detail || data.error);
 
     const list = data.realtimePositionList || [];
     if (!list.length) throw new Error('운행 데이터 없음');
@@ -956,9 +969,7 @@ async function fetchRealTrains() {
     // API 응답을 simTrains 형식으로 변환
     const converted = list.map((t, i) => {
       const isUp = t.updnLine === '상행' || t.updnLine === '1';
-      const stnIdx = statnIdToIdx(t.statnId);
-      // 다음역 정보로 열차 위치를 역과 역 사이로 보정
-      const nextIdx = statnIdToIdx(t.statnNm2 ? t.statnId : t.statnId);
+      const stnIdx = statnIdToIdx(t.statnId, t.statnNm);
       // 현재역 진입 여부에 따라 소수점 위치 조정 (0=출발직후, 0.8=도착직전)
       const inOut = t.trainSttus === '2' ? 0.1 : 0.7; // 2=출발, 1=도착
       const pos = stnIdx >= 0 ? stnIdx + inOut : i * 2;
@@ -969,13 +980,14 @@ async function fetchRealTrains() {
         pos: Math.min(pos, N - 1),
         express: t.btrainSttus === '급행' || t.btrainSttus === '특급',
         num: t.trainNo || ('열차' + i),
-        speed: 0,        // 실제 API 모드에서는 직접 이동 없음
+        speed: 0.04,
         statnNm: t.statnNm || '',
       };
     });
 
     return converted;
   } catch (e) {
+    window._lastApiError = e.message;
     console.warn('[API] 실패:', e.message);
     return null;
   }
@@ -999,7 +1011,7 @@ function setModeBadge(mode) {
     badge.textContent = '🔴 오프라인';
     badge.style.cssText = 'font-size:10px;padding:3px 8px;border-radius:10px;background:rgba(240,78,78,.15);color:var(--red);border:1px solid var(--red)';
     dot.className = 'pulse off';
-    txt.textContent = '연결 실패';
+    txt.textContent = window._lastApiError || '연결 실패';
   }
 }
 
@@ -1025,8 +1037,7 @@ async function startRealMode() {
     applyRealTrains(trains);
     setModeBadge('real');
   } else {
-    // 첫 호출 실패 → 시뮬레이션 폴백
-    startSimFallback();
+    setModeBadge('offline');
     return;
   }
 
@@ -1072,7 +1083,6 @@ async function init() {
     renderArrival();
 
     // 실제 API 시도
-    setModeBadge('sim');
     const trains = await fetchRealTrains();
     if (trains && trains.length > 0) {
       // 성공 → 실시간 모드 전환
@@ -1089,11 +1099,7 @@ async function init() {
         }
       }, 30000);
     } else {
-      // 실패 → 시뮬레이션 계속
-      simTimer = setInterval(() => {
-        stepSim();
-        if (document.getElementById('mapPage').classList.contains('active')) renderArrival();
-      }, 900);
+      setModeBadge('offline');
     }
   }, 150);
 
