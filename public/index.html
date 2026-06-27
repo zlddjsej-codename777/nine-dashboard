@@ -957,7 +957,7 @@ async function fetchRealTrains() {
   try {
     const params = new URLSearchParams({ line: '9호선', start: '0', end: '100' });
     const res = await fetch(`/api/subway?${params.toString()}`, {
-      signal: AbortSignal.timeout(7000)
+      signal: AbortSignal.timeout(22000)
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || data.error || `HTTP ${res.status}`);
@@ -987,10 +987,18 @@ async function fetchRealTrains() {
 
     return converted;
   } catch (e) {
-    window._lastApiError = e.message;
+    window._lastApiError = e.name === 'TimeoutError' ? '서울 API 응답 지연' : e.message;
     console.warn('[API] 실패:', e.message);
     return null;
   }
+}
+
+async function fetchRealTrainsWithRetry() {
+  const first = await fetchRealTrains();
+  if (first && first.length > 0) return first;
+
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  return fetchRealTrains();
 }
 
 function setModeBadge(mode) {
@@ -1032,7 +1040,7 @@ async function startRealMode() {
   clearInterval(apiTimer);
   apiMode = true;
 
-  const trains = await fetchRealTrains();
+  const trains = await fetchRealTrainsWithRetry();
   if (trains) {
     applyRealTrains(trains);
     setModeBadge('real');
@@ -1042,7 +1050,7 @@ async function startRealMode() {
   }
 
   apiTimer = setInterval(async () => {
-    const fresh = await fetchRealTrains();
+    const fresh = await fetchRealTrainsWithRetry();
     if (fresh) {
       applyRealTrains(fresh);
       setModeBadge('real');
@@ -1083,14 +1091,14 @@ async function init() {
     renderArrival();
 
     // 실제 API 시도
-    const trains = await fetchRealTrains();
+    const trains = await fetchRealTrainsWithRetry();
     if (trains && trains.length > 0) {
       // 성공 → 실시간 모드 전환
       clearInterval(simTimer);
       applyRealTrains(trains);
       setModeBadge('real');
       apiTimer = setInterval(async () => {
-        const fresh = await fetchRealTrains();
+        const fresh = await fetchRealTrainsWithRetry();
         if (fresh && fresh.length > 0) {
           applyRealTrains(fresh);
           setModeBadge('real');
