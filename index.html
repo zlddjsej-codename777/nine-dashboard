@@ -1,91 +1,420 @@
-package egovframework.com.opdata.together.notice.web;
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>서울 9호선 실시간 대시보드</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;color:#e6edf3;font-family:'Segoe UI',sans-serif;min-height:100vh}
+header{background:#161b22;border-bottom:2px solid #b8a000;padding:14px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-circle{width:34px;height:34px;border-radius:50%;background:#b8a000;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;color:#000}
+header h1{font-size:17px;font-weight:700;color:#d4af00}
+.mode-badge{background:#1f4a1f;color:#3fb950;border:1px solid #3fb950;font-size:11px;padding:3px 8px;border-radius:12px;margin-left:4px}
+.api-form{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;align-items:center}
+.api-form input{background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:7px 11px;border-radius:6px;font-size:12px;width:220px}
+.api-form input:focus{outline:none;border-color:#b8a000}
+.btn{background:#b8a000;color:#000;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;white-space:nowrap}
+.btn:hover{background:#d4c200}
+.btn.sec{background:#21262d;color:#e6edf3;border:1px solid #30363d}
+.btn.sec:hover{background:#30363d}
+.btn.active{background:#1f4a1f;color:#3fb950;border:1px solid #3fb950}
 
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.URLEncoder;
+.status-bar{display:flex;align-items:center;gap:10px;padding:8px 20px;background:#161b22;font-size:11px;color:#8b949e;border-bottom:1px solid #21262d;flex-wrap:wrap}
+.dot{width:8px;height:8px;border-radius:50%;background:#3fb950;display:inline-block;animation:blink 1.5s infinite}
+.dot.off{background:#f85149;animation:none}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
+.tabs{display:flex;padding:0 20px;background:#161b22;border-bottom:1px solid #21262d}
+.tab{padding:11px 18px;cursor:pointer;font-size:13px;color:#8b949e;border-bottom:2px solid transparent;transition:all .2s}
+.tab.active{color:#d4af00;border-bottom-color:#d4af00}
+.tab:hover{color:#e6edf3}
 
-import java.io.BufferedReader;
-import java.io.IOException;
+.container{padding:20px}
 
-public class ApiExplorer {
-	
-	public static void main(String[] args) throws IOException, Exception {
-		
-		// 초기 row 갯수를 가져오기 위한 셋팅합니다.
-		StringBuilder urlBuilder = new StringBuilder("42656476447a6c643634726e727647"); /*URL*/
-		//urlBuilder.append("/" +  URLEncoder.encode("sample","UTF-8") ); /*인증키 (sample사용시에는 호출시 제한됩니다.)*/
-		urlBuilder.append("/" +  URLEncoder.encode("486c7a6b737a6c643234714a584646","UTF-8") ); /*인증키 (sample사용시에는 호출시 제한됩니다.)*/
-		urlBuilder.append("/" +  URLEncoder.encode("xml","UTF-8") ); /*요청파일타입 (xml,xmlf,xls,json) */
-		urlBuilder.append("/" + URLEncoder.encode("RealtimeCityAir","UTF-8")); /*서비스명 (대소문자 구분 필수입니다.)*/
-		urlBuilder.append("/" + URLEncoder.encode("1","UTF-8")); /*요청시작위치 (sample인증키 사용시 5이내 숫자를 사용해야 합니다.)*/
-		//urlBuilder.append("/" + URLEncoder.encode("5","UTF-8")); /*요청종료위치(sample인증키 사용시 5이상 숫자 선택 안 됩니다.)*/
-		urlBuilder.append("/" + URLEncoder.encode("1000","UTF-8")); /*요청종료위치(sample인증키 사용시 5이상 숫자 선택 안 됩니다.)*/
-		// 상위 5개는 필수적으로 순서바꾸지 않고 호출해야 합니다.
-		
-		// 서비스별 추가 요청 인자이며 자세한 내용은 각 서비스별 api탭 - '요청인자'부분에 자세히 나와 있습니다.
-		// 요청 인자가 여러개일 경우, 필수 여부를 확인해 필수인 값은 무조건 넣어서 조회해야 합니다.
-		// 필수가 아닐 경우, 그리고 공백으로 처리해야할 경우 공백 대신 %20을 붙여 조회하시면 됩니다.
-		// ex) http://openapi.seoul.go.kr:8088/sample/xml/SeoulAdminMesure/1/5/%20/%20/%20/%20/향진
-		urlBuilder.append("/" + URLEncoder.encode("%20","UTF-8")); /* 서비스별 추가 요청인자들*/
-		urlBuilder.append("/" + URLEncoder.encode("중구","UTF-8")); /* 서비스별 추가 요청인자들*/
-		
-		// Xml 파싱해서 텍스트화 시키는 작업입니다.
-		DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-		DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-		Document dDocument = dBuilder.parse(urlBuilder.toString());
-		dDocument.getDocumentElement().normalize();
-		
-		// 측정일시
-		NodeList nList = dDocument.getElementsByTagName("MSRDT");
-		Node nNode = nList.item(0);
-		Element eElement = (Element) nNode;
-		System.out.println("파라미터 확인: " + eElement.getTextContent());
-		// 권역명
-		NodeList nList2 = dDocument.getElementsByTagName("MSRRGN_NM");
-		Node nNode2 = nList2.item(0);
-		Element eElement2 = (Element) nNode2;
-		
-		// 측정소명
-		NodeList nList3 = dDocument.getElementsByTagName("MSRSTE_NM");
-		Node nNode3 = nList3.item(0);
-		Element eElement3 = (Element) nNode3;
-		
-		// 통합대기환경등급
-		NodeList nList4 = dDocument.getElementsByTagName("IDEX_NM");
-		Node nNode4 = nList4.item(0);
-		Element eElement4 = (Element) nNode4;
-		
-		System.out.println(eElement.getTextContent() + " 기준"); 
-		System.out.println("(" + eElement2.getTextContent() + ")" + eElement3.getTextContent() + " 날씨는 " + eElement4.getTextContent() + "입니다.");
-		
-		URL url = new URL(urlBuilder.toString());
-		HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-		conn.setRequestMethod("GET");
-		conn.setRequestProperty("Content-type", "application/xml");
-		//System.out.println("Response code: " + conn.getResponseCode()); /* 연결 자체에 대한 확인이 필요하므로 추가합니다.*/
-		
-		BufferedReader rd;
-		// 서비스코드가 정상이면 200~300사이의 숫자가 나옵니다.
-		if(conn.getResponseCode() >= 200 && conn.getResponseCode() <= 300) {
-			rd = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-		} else {
-			rd = new BufferedReader(new InputStreamReader(conn.getErrorStream()));
-		}
-		StringBuilder sb = new StringBuilder();
-		String line;
-		while ((line = rd.readLine()) != null) {
-			sb.append(line);
-		}
-		rd.close();
-		conn.disconnect();
-		//System.out.println(sb.toString());
-	}
+/* 노선도 */
+#mapView{overflow-x:auto;padding-bottom:8px}
+.map-wrap{position:relative;padding:20px 20px 16px;min-width:960px}
+
+/* 상행/하행 트랙 */
+.track-up{position:absolute;left:30px;right:30px;height:5px;background:#b8a000;top:72px;border-radius:3px;z-index:0}
+.track-down{position:absolute;left:30px;right:30px;height:5px;background:#4f9cf0;top:132px;border-radius:3px;z-index:0}
+
+.track-label-up{position:absolute;left:6px;top:69px;font-size:9px;color:#b8a000;font-weight:700}
+.track-label-down{position:absolute;left:6px;top:129px;font-size:9px;color:#4f9cf0;font-weight:700}
+
+.stations-row{display:flex;justify-content:space-between;position:relative;z-index:1;margin-top:0}
+.stn{display:flex;flex-direction:column;align-items:center;cursor:pointer;width:28px}
+.stn-name{font-size:8.5px;color:#8b949e;text-align:center;line-height:1.3;height:28px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:4px;word-break:keep-all}
+.stn-circle{width:13px;height:13px;border-radius:50%;background:#161b22;border:2.5px solid #b8a000;margin:0 auto;transition:all .2s}
+.stn.express .stn-circle{background:#b8a000}
+.stn:hover .stn-circle{transform:scale(1.5)}
+.stn-bottom{height:40px}/* 하단 여백 */
+
+/* 열차 마커 */
+.train-marker{position:absolute;z-index:10;transition:left .8s cubic-bezier(.4,0,.2,1);pointer-events:auto;cursor:pointer}
+.train-marker:hover .train-tooltip{display:block}
+.train-body{display:flex;align-items:center;justify-content:center;width:26px;height:14px;border-radius:3px;font-size:8px;font-weight:900;color:#000;position:relative}
+.train-body.up{background:#e6b800}
+.train-body.down{background:#4f9cf0;color:#fff}
+.train-body.express-t{background:#f85149!important;color:#fff!important;box-shadow:0 0 6px 2px rgba(248,81,73,.7)}
+.train-num{font-size:7px;opacity:.8;text-align:center;margin-top:1px;color:#ccc;white-space:nowrap}
+.train-tooltip{display:none;position:absolute;bottom:22px;left:50%;transform:translateX(-50%);background:#21262d;border:1px solid #30363d;border-radius:6px;padding:6px 8px;font-size:10px;color:#e6edf3;white-space:nowrap;z-index:20;min-width:90px}
+
+/* 도착 정보 */
+.station-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px}
+.scard{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:12px}
+.scard h3{font-size:13px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.ebadge{background:#b8a000;color:#000;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700}
+.arrival-item{display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:5px 8px;border-radius:5px;background:#0d1117;margin-bottom:4px}
+.adir{color:#8b949e}
+.atime{font-weight:700}
+.atime.soon{color:#f85149}
+.atime.med{color:#e6b800}
+.atime.ok{color:#3fb950}
+.atrain{font-size:9px;color:#8b949e}
+
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:#8b949e;margin-bottom:14px;align-items:center}
+.li{display:flex;align-items:center;gap:4px}
+.lb{width:14px;height:8px;border-radius:2px}
+
+.info-box{background:#1a1f2e;border:1px solid #2d4a7a;color:#79aef0;padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:14px;line-height:1.6}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-circle">9</div>
+    <h1>서울 9호선 실시간 대시보드 <span class="mode-badge" id="modeBadge">🟢 시뮬레이션</span></h1>
+  </div>
+  <div class="api-form">
+    <input type="text" id="apiKeyInput" placeholder="실시간 지하철 API 키 입력 (선택)" value="486c7a6b737a6c643234714a584646" />
+    <button class="btn" onclick="loadReal()">🔌 실제 API</button>
+    <button class="btn sec active" id="simBtn" onclick="startSim()">🎮 시뮬레이션</button>
+    <button class="btn sec" id="autoBtn" onclick="toggleAuto()">⏱ 자동갱신</button>
+  </div>
+</header>
+
+<div class="status-bar">
+  <span id="statusDot" class="dot"></span>
+  <span id="statusText">시뮬레이션 모드로 운행 중</span>
+  <span style="margin-left:auto" id="lastUpd"></span>
+  <span id="autoStat"></span>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('map')">🗺 노선도</div>
+  <div class="tab" onclick="switchTab('list')">📋 도착정보</div>
+</div>
+
+<div class="container">
+  <div id="errorBox" style="display:none"></div>
+
+  <div id="mapView">
+    <div class="legend">
+      <div class="li"><div class="lb" style="background:#e6b800"></div> 상행 일반</div>
+      <div class="li"><div class="lb" style="background:#e6b800;box-shadow:0 0 4px #e6b800"></div> 상행 급행</div>
+      <div class="li"><div class="lb" style="background:#4f9cf0"></div> 하행 일반</div>
+      <div class="li"><div class="lb" style="background:#4f9cf0;box-shadow:0 0 4px #4f9cf0"></div> 하행 급행</div>
+      <div class="li"><div style="width:10px;height:10px;border-radius:50%;background:#b8a000"></div> 급행정차역</div>
+      <div class="li"><div style="width:10px;height:10px;border-radius:50%;border:2px solid #b8a000;background:#161b22"></div> 일반역</div>
+    </div>
+    <div class="map-wrap" id="mapWrap">
+      <div class="track-label-up">상행 →</div>
+      <div class="track-label-down">← 하행</div>
+      <div class="track-up"></div>
+      <div class="track-down"></div>
+      <div class="stations-row" id="stationsRow"></div>
+      <div id="trainMarkers"></div>
+    </div>
+  </div>
+
+  <div id="listView" style="display:none">
+    <div class="info-box">💡 아래는 시뮬레이션 기반 도착 예정 정보입니다. 실제 도착 시간과 다를 수 있습니다.</div>
+    <div class="station-grid" id="stationGrid"></div>
+  </div>
+</div>
+
+<script>
+const STATIONS = [
+  {n:'개화',c:'9001',e:true},{n:'김포공항',c:'9002',e:true},{n:'공항시장',c:'9003',e:false},
+  {n:'신방화',c:'9004',e:false},{n:'마곡나루',c:'9005',e:true},{n:'양천향교',c:'9006',e:false},
+  {n:'가양',c:'9007',e:true},{n:'증미',c:'9008',e:false},{n:'등촌',c:'9009',e:false},
+  {n:'염창',c:'9010',e:false},{n:'신목동',c:'9011',e:false},{n:'선유도',c:'9012',e:false},
+  {n:'당산',c:'9013',e:true},{n:'국회의사당',c:'9014',e:false},{n:'여의도',c:'9015',e:true},
+  {n:'샛강',c:'9016',e:false},{n:'노량진',c:'9017',e:true},{n:'노들',c:'9018',e:false},
+  {n:'흑석',c:'9019',e:false},{n:'동작',c:'9020',e:true},{n:'구반포',c:'9021',e:false},
+  {n:'신반포',c:'9022',e:false},{n:'고속터미널',c:'9023',e:true},{n:'사평',c:'9024',e:false},
+  {n:'신논현',c:'9025',e:true},{n:'언주',c:'9026',e:false},{n:'선정릉',c:'9027',e:false},
+  {n:'삼성중앙',c:'9028',e:false},{n:'봉은사',c:'9029',e:false},{n:'종합운동장',c:'9030',e:true},
+  {n:'삼전',c:'9031',e:false},{n:'석촌고분',c:'9032',e:false},{n:'석촌',c:'9033',e:true},
+  {n:'송파나루',c:'9034',e:false},{n:'한성백제',c:'9035',e:false},{n:'올림픽공원',c:'9036',e:true},
+  {n:'둔촌오륜',c:'9037',e:false},{n:'중앙보훈병원',c:'9038',e:true}
+];
+
+// 시뮬레이션 열차 상태
+let simTrains = [];
+let simTimer = null;
+let autoTimer = null;
+let autoOn = false;
+let currentTab = 'map';
+let simMode = true;
+
+function initSimTrains() {
+  simTrains = [];
+  const N = STATIONS.length;
+  // 상행 열차 9대
+  const upPositions = [0,4,8,12,16,20,24,28,33];
+  upPositions.forEach((pos,i) => {
+    const isExpress = i % 3 === 0;
+    simTrains.push({
+      id: 'U'+(i+1), dir:'up', pos: pos + Math.random()*0.8,
+      express: isExpress, num: `90${10+i}`, speed: isExpress ? 0.07 : 0.04
+    });
+  });
+  // 하행 열차 9대
+  const downPositions = [2,6,10,14,18,22,26,30,35];
+  downPositions.forEach((pos,i) => {
+    const isExpress = i % 3 === 0;
+    simTrains.push({
+      id: 'D'+(i+1), dir:'down', pos: pos + Math.random()*0.8,
+      express: isExpress, num: `91${10+i}`, speed: isExpress ? 0.07 : 0.04
+    });
+  });
 }
+
+function stepSim() {
+  const N = STATIONS.length - 1;
+  simTrains.forEach(t => {
+    if (t.dir === 'up') {
+      t.pos += t.speed;
+      if (t.pos > N) t.pos = 0;
+    } else {
+      t.pos -= t.speed;
+      if (t.pos < 0) t.pos = N;
+    }
+  });
+  renderMap();
+  if (currentTab === 'list') renderList();
+}
+
+function renderStations() {
+  const row = document.getElementById('stationsRow');
+  row.innerHTML = STATIONS.map((s,i) => `
+    <div class="stn ${s.e?'express':''}" id="stn_${i}">
+      <div class="stn-name">${s.n}</div>
+      <div class="stn-circle"></div>
+      <div class="stn-bottom"></div>
+    </div>
+  `).join('');
+}
+
+function getStationX(idx) {
+  const wrap = document.getElementById('mapWrap');
+  const nodes = document.querySelectorAll('.stn');
+  if (!nodes[idx]) return 0;
+  const wrapRect = wrap.getBoundingClientRect();
+  const nodeRect = nodes[idx].getBoundingClientRect();
+  return nodeRect.left - wrapRect.left + nodeRect.width/2;
+}
+
+function renderMap() {
+  const markers = document.getElementById('trainMarkers');
+  markers.innerHTML = '';
+  const wrap = document.getElementById('mapWrap');
+
+  simTrains.forEach(t => {
+    const idxF = Math.floor(t.pos);
+    const idxC = Math.min(idxF+1, STATIONS.length-1);
+    const frac = t.pos - idxF;
+    const x1 = getStationX(idxF);
+    const x2 = getStationX(idxC);
+    const x = x1 + (x2-x1)*frac;
+
+    const isUp = t.dir === 'up';
+    const topPx = isUp ? 64 : 124;
+    const curStn = STATIONS[Math.round(t.pos)] || STATIONS[idxF];
+
+    const div = document.createElement('div');
+    div.className = 'train-marker';
+    div.style.left = (x - 13) + 'px';
+    div.style.top = topPx + 'px';
+    div.innerHTML = `
+      <div class="train-body ${isUp?'up':'down'} ${t.express?'express-t':''}">${isUp?'▶':'◀'}</div>
+      <div class="train-num">${t.num}</div>
+      <div class="train-tooltip">
+        🚇 ${t.num}<br>
+        ${isUp?'상행(개화→중앙보훈)':'하행(중앙보훈→개화)'}<br>
+        ${t.express?'🚄 급행':'일반'}<br>
+        현재: ${curStn.n}
+      </div>
+    `;
+    markers.appendChild(div);
+  });
+
+  document.getElementById('lastUpd').textContent = '갱신: ' + new Date().toLocaleTimeString('ko-KR');
+}
+
+function getArrivalData() {
+  const result = {};
+  STATIONS.forEach((s, sIdx) => {
+    const arrivals = [];
+    simTrains.forEach(t => {
+      const isUp = t.dir === 'up';
+      let dist;
+      if (isUp) {
+        dist = sIdx - t.pos;
+        if (dist < 0) dist += STATIONS.length;
+      } else {
+        dist = t.pos - sIdx;
+        if (dist < 0) dist += STATIONS.length;
+      }
+      if (dist > 0 && dist < 6) {
+        const sec = Math.round(dist / t.speed * 0.8);
+        arrivals.push({ dir: isUp?'상행':'하행', sec, num: t.num, express: t.express });
+      }
+    });
+    arrivals.sort((a,b) => a.sec - b.sec);
+    result[s.n] = arrivals.slice(0,4);
+  });
+  return result;
+}
+
+function renderList() {
+  const data = getArrivalData();
+  document.getElementById('stationGrid').innerHTML = STATIONS.map(s => {
+    const arr = data[s.n] || [];
+    const items = arr.length ? arr.map(a => {
+      const min = Math.floor(a.sec/60), sec2 = a.sec%60;
+      const cls = a.sec<60?'soon':a.sec<180?'med':'ok';
+      const t = a.sec<60?'곧 도착':`${min}분 ${sec2}초`;
+      return `<div class="arrival-item">
+        <span class="adir">${a.dir==='상행'?'→상행':'←하행'}</span>
+        <span class="atrain">${a.num}${a.express?' 급행':''}</span>
+        <span class="atime ${cls}">${t}</span>
+      </div>`;
+    }).join('') : '<div style="color:#8b949e;font-size:11px;padding:4px">잠시 후 도착 예정</div>';
+    return `<div class="scard">
+      <h3>${s.n}${s.e?'<span class="ebadge">급행</span>':''}</h3>
+      ${items}
+    </div>`;
+  }).join('');
+}
+
+function startSim() {
+  simMode = true;
+  clearInterval(simTimer);
+  initSimTrains();
+  renderStations();
+  setTimeout(() => {
+    renderMap();
+    renderList();
+    simTimer = setInterval(stepSim, 800);
+  }, 100);
+  document.getElementById('modeBadge').textContent = '🟢 시뮬레이션';
+  document.getElementById('modeBadge').style.cssText = 'background:#1f4a1f;color:#3fb950;border:1px solid #3fb950;font-size:11px;padding:3px 8px;border-radius:12px;margin-left:4px';
+  document.getElementById('statusText').textContent = '시뮬레이션 모드 — 열차 '+simTrains.length+'대 운행 중';
+  document.getElementById('statusDot').className = 'dot';
+  document.getElementById('simBtn').className = 'btn sec active';
+}
+
+async function loadReal() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!key) { showErr('API 키를 입력해주세요'); return; }
+  clearInterval(simTimer);
+  simMode = false;
+  document.getElementById('statusText').textContent = '실제 API 조회 중...';
+  document.getElementById('statusDot').className = 'dot off';
+  hideErr();
+
+  const PROXIES = [
+    'https://corsproxy.io/?',
+    'https://api.allorigins.win/raw?url='
+  ];
+  async function fetchP(url) {
+    for (const p of PROXIES) {
+      try {
+        const r = await fetch(p + encodeURIComponent(url));
+        if (!r.ok) continue;
+        return await r.json();
+      } catch(e) { continue; }
+    }
+    throw new Error('서버 연결 실패 — 시뮬레이션 모드를 이용해주세요');
+  }
+
+  try {
+    const url = `https://swopenapi.seoul.go.kr/api/subway/${key}/json/realtimePosition/0/100/${encodeURIComponent('9호선')}`;
+    const json = await fetchP(url);
+    if (json.errorMessage?.status >= 400) throw new Error(json.errorMessage.message);
+    const trains = json.realtimePositionList || [];
+
+    // 실제 데이터로 simTrains 덮어쓰기
+    simTrains = trainData;
+
+    // 도착정보 렌더링 (실제 API 데이터 기반)
+    const grid = document.getElementById('stationGrid');
+    grid.innerHTML = STATIONS.map(s => {
+      const arr = arrivalData[s.n] || [];
+      const items = arr.length ? arr.slice(0,4).map(a => {
+        const sec = parseInt(a.barvlDt || 0);
+        const min = Math.floor(sec/60);
+        const cls = sec < 60 ? 'soon' : sec < 180 ? 'med' : 'ok';
+        const timeStr = sec < 30 ? a.arvlMsg2 : `${min}분 후`;
+        const dir = a.updnLine === '하행' ? '←하행' : '→상행';
+        return `<div class="arrival-item">
+          <span class="adir">${dir}</span>
+          <span class="atrain">${a.btrainNo} ${a.btrainSttus==='급행'?'🔴급행':''}</span>
+          <span class="atime ${cls}">${timeStr}</span>
+        </div>`;
+      }).join('') : '<div style="color:#8b949e;font-size:11px;padding:4px">운행 정보 없음</div>';
+      return `<div class="scard">
+        <h3>${s.n}${s.e?'<span class="ebadge">급행</span>':''}</h3>
+        ${items}
+      </div>`;
+    }).join('');
+
+    renderMap();
+    document.getElementById('modeBadge').textContent = '🔵 실시간 API';
+    document.getElementById('modeBadge').style.cssText = 'background:#1a2d4a;color:#79aef0;border:1px solid #79aef0;font-size:11px;padding:3px 8px;border-radius:12px;margin-left:4px';
+    document.getElementById('statusText').textContent = `실제 데이터 — 9호선 열차 ${trainData.length}대 운행 중`;
+    document.getElementById('statusDot').className = 'dot';
+    document.getElementById('listMessage') && (document.getElementById('listMessage').style.display='none');
+  } catch(e) {
+    showErr(e.message);
+    document.getElementById('statusDot').className = 'dot off';
+    document.getElementById('statusText').textContent = '오류 발생';
+  }
+}
+
+function toggleAuto() {
+  autoOn = !autoOn;
+  const btn = document.getElementById('autoBtn');
+  if (autoOn) {
+    autoTimer = setInterval(() => { if (!simMode) loadReal(); }, 30000);
+    btn.textContent = '⏹ 자동갱신 중'; btn.className = 'btn sec active';
+    document.getElementById('autoStat').textContent = '30초마다 갱신';
+  } else {
+    clearInterval(autoTimer);
+    btn.textContent = '⏱ 자동갱신'; btn.className = 'btn sec';
+    document.getElementById('autoStat').textContent = '';
+  }
+}
+
+function switchTab(t) {
+  currentTab = t;
+  document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('active', (i===0&&t==='map')||(i===1&&t==='list')));
+  document.getElementById('mapView').style.display = t==='map'?'block':'none';
+  document.getElementById('listView').style.display = t==='list'?'block':'none';
+  if (t==='list') renderList();
+}
+
+function showErr(m) { const b=document.getElementById('errorBox'); b.style.display='block'; b.className='info-box'; b.style.borderColor='#f85149'; b.style.color='#f85149'; b.innerHTML='⚠️ '+m; }
+function hideErr() { document.getElementById('errorBox').style.display='none'; }
+
+// 초기화
+renderStations();
+setTimeout(startSim, 200);
+</script>
+</body>
+</html>
