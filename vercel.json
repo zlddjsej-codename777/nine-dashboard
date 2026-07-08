@@ -2,7 +2,7 @@
   "regions": ["icn1"],
   "functions": {
     "api/subway.js": {
-      "maxDuration": 30
+      "maxDuration": 60
     }
   }
 }
