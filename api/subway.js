@@ -51,7 +51,10 @@ async function fetchStation(stationName) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NineLineDashboard/1.0)' }
+    });
     clearTimeout(timer);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -101,6 +104,8 @@ module.exports = async (req, res) => {
     if (!debugSample) {
       debugSample = {
         station: stationName,
+        rawKeys: Object.keys(raw || {}),
+        rawJSON: JSON.stringify(raw).slice(0, 800),
         rawErrorMessage: raw.errorMessage || null,
         rawListLength: list.length,
         afterLine9FilterLength: rows.length,
@@ -173,4 +178,3 @@ module.exports = async (req, res) => {
     diagnostics // 역별 recptnDt 시차 — 이 값으로 "현재시간과 열차 데이터가 맞는지" 직접 확인 가능
   });
 };
- 
