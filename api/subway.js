@@ -16,9 +16,9 @@
 //
 // 주의: 이 API는 환승역의 경우 해당 역을 지나는 다른 호선 열차 정보도 함께 반환하므로
 // subwayId / trainLineNm 기준으로 9호선만 필터링합니다.
- 
+
 const SEOUL_API_KEY = process.env.SEOUL_SUBWAY_API_KEY;
- 
+
 const STATIONS = [
   '개화', '김포공항', '공항시장', '신방화', '마곡나루', '양천향교', '가양', '증미', '등촌',
   '염창', '신목동', '선유도', '당산', '국회의사당', '여의도', '샛강', '노량진', '노들',
@@ -26,26 +26,26 @@ const STATIONS = [
   '삼성중앙', '봉은사', '종합운동장', '삼전', '석촌고분', '석촌', '송파나루', '한성백제',
   '올림픽공원', '둔촌오륜', '중앙보훈병원'
 ];
- 
+
 // 역간 평균 소요시간(초) — 실제 운행 데이터에 맞춰 조정 필요할 수 있음
 const AVG_SEGMENT_SEC = 120;
- 
+
 // 이 값보다 recptnDt 시차가 크면 "데이터 지연" 경고
 const LAG_WARN_THRESHOLD_SEC = 300;
- 
-function kstNowSeconds() {
-  const now = new Date();
-  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  return Math.floor(kst.getTime() / 1000);
+
+function nowEpochSeconds() {
+  // recptnDt 파싱 시 이미 '+09:00'을 붙여 절대 UTC epoch으로 변환하므로,
+  // 여기서는 순수 UTC epoch만 반환하면 된다 (9시간을 또 더하면 이중 보정 버그가 생김).
+  return Math.floor(Date.now() / 1000);
 }
- 
+
 // "2026-07-14 15:23:10" (서울시 API는 TZ 표기 없이 KST 기준 문자열을 줌)
 function parseRecptnDt(str) {
   if (!str) return null;
   const t = new Date(str.replace(' ', 'T') + '+09:00').getTime();
   return Number.isNaN(t) ? null : Math.floor(t / 1000);
 }
- 
+
 async function fetchStation(stationName) {
   const url = `http://swopenapi.seoul.go.kr/api/subway/${SEOUL_API_KEY}/json/realtimeStationArrival/0/20/${encodeURIComponent(stationName)}`;
   const controller = new AbortController();
@@ -64,12 +64,12 @@ async function fetchStation(stationName) {
     throw e;
   }
 }
- 
+
 function isLine9(row) {
   const tag = `${row.subwayId || ''} ${row.trainLineNm || ''}`;
   return tag.includes('9호선') || row.subwayId === '1009' || row.subwayId === '1092';
 }
- 
+
 module.exports = async (req, res) => {
   if (!SEOUL_API_KEY) {
     res.status(200).json({
@@ -78,41 +78,41 @@ module.exports = async (req, res) => {
     });
     return;
   }
- 
-  const nowSec = kstNowSeconds();
+
+  const nowSec = nowEpochSeconds();
   const settled = await Promise.allSettled(STATIONS.map(fetchStation));
- 
+
   const perTrain = new Map(); // trainNo -> 가장 가까운 도착 레코드
   const diagnostics = [];
   let failCount = 0;
- 
+
   settled.forEach((r, idx) => {
     const stationName = STATIONS[idx];
- 
+
     if (r.status !== 'fulfilled') {
       failCount++;
       diagnostics.push({ station: stationName, ok: false, error: r.reason?.message || 'unknown error' });
       return;
     }
- 
+
     const rows = r.value.filter(isLine9);
     const sampleLag = rows[0] ? (() => {
       const rt = parseRecptnDt(rows[0].recptnDt);
       return rt ? nowSec - rt : null;
     })() : null;
- 
+
     diagnostics.push({ station: stationName, ok: true, count: rows.length, lagSec: sampleLag });
- 
+
     rows.forEach(row => {
       const trainNo = row.btrainNo || row.trainNo;
       const eta = parseInt(row.barvlDt, 10);
       if (!trainNo || Number.isNaN(eta)) return;
- 
+
       const recTime = parseRecptnDt(row.recptnDt);
       const lag = recTime ? Math.max(0, nowSec - recTime) : 0;
       // 서울시 안내대로 시차만큼 보정: 실제 남은 시간 = 원래 ETA - 데이터 지연시간
       const effEta = Math.max(0, eta - lag);
- 
+
       const existing = perTrain.get(trainNo);
       if (!existing || effEta < existing.effEta) {
         perTrain.set(trainNo, {
@@ -126,7 +126,7 @@ module.exports = async (req, res) => {
       }
     });
   });
- 
+
   const trains = [];
   perTrain.forEach(t => {
     const frac = Math.max(0, Math.min(1, t.effEta / AVG_SEGMENT_SEC));
@@ -143,7 +143,7 @@ module.exports = async (req, res) => {
       dataLagSec: t.lag
     });
   });
- 
+
   const maxLag = diagnostics.reduce((m, d) => (d.lagSec != null && d.lagSec > m ? d.lagSec : m), 0);
   let warning = '';
   if (failCount > STATIONS.length / 2) {
@@ -151,11 +151,12 @@ module.exports = async (req, res) => {
   } else if (maxLag > LAG_WARN_THRESHOLD_SEC) {
     warning = `데이터 지연 ${maxLag}초 감지 — 서울시 원본 데이터가 지연되고 있을 수 있습니다.`;
   }
- 
+
   res.status(200).json({
     trains,
     warning,
-    serverTimeKST: new Date(nowSec * 1000).toISOString(),
+    serverTimeUTC: new Date(nowSec * 1000).toISOString(),
+    serverTimeKST: new Date(nowSec * 1000).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }),
     diagnostics // 역별 recptnDt 시차 — 이 값으로 "현재시간과 열차 데이터가 맞는지" 직접 확인 가능
   });
 };
