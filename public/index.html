@@ -190,7 +190,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .wd-mday-date{color:var(--txt3);font-size:8px}
 .wd-mday-val{font-weight:700;margin-top:2px}
 .wd-timebox{display:flex;gap:8px;background:var(--bg3);border:1px solid var(--gold-dim);border-radius:10px;padding:10px 12px;margin-bottom:12px}
-.wd-timebox-item{flex:1;text-align:center}
+.wd-timebox-item{flex:1;text-align:center;font-size:14px;font-weight:700;color:var(--gold)}
 .wd-timebox-lab{font-size:9px;color:var(--txt3)}
 .wd-timebox-val{font-size:16px;font-weight:800;color:var(--gold);margin-top:2px}
 .wd-timebox-none{font-size:12px;color:var(--txt3);text-align:center;padding:6px 0}
@@ -379,7 +379,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
         <div class="work-s-card"><div class="work-s-val" style="color:var(--gold)" id="wsWork">-</div><div class="work-s-lab">근무</div></div>
         <div class="work-s-card"><div class="work-s-val" style="color:var(--down)" id="wsOff">-</div><div class="work-s-lab">비번</div></div>
         <div class="work-s-card"><div class="work-s-val" style="color:var(--orange)" id="wsRest">-</div><div class="work-s-lab">휴무</div></div>
-        <div class="work-s-card"><div class="work-s-val" style="color:var(--red)" id="wsHoli">-</div><div class="work-s-lab">주말/공휴일</div></div>
+        <div class="work-s-card"><div class="work-s-val" style="color:var(--red)" id="wsHoli">-</div><div class="work-s-lab">(주말)통상근무휴일</div></div>
       </div>
 
       <div class="work-search-wrap">
@@ -807,7 +807,7 @@ function renderWorkPage(){
     const hex = WORK_COLOR_HEX[e.color]||'#8fa0b4';
     const nameDisp = maskName(e.name);
     const wt = getWorkTime(val, dateObj);
-    const timeLine = wt ? `<div class="wc-time">🕐 ${wt.in} → ${wt.out}</div>` : '';
+    const timeLine = wt ? `<div class="wc-time">출근시간:${wt.in} 퇴근시간:${wt.out}</div>` : '';
     return `<div class="work-card" onclick="openWorkDetail(${e.no})">
       <div class="wc-dot" style="background:${hex}"></div>
       <div class="wc-info">
@@ -840,8 +840,7 @@ function openWorkDetail(no){
   const timeBox = document.getElementById('wdTimeBox');
   if(wt){
     timeBox.innerHTML = `<div class="wd-timebox">
-      <div class="wd-timebox-item"><div class="wd-timebox-lab">${fmtYMD(viewDateForTime)} 출근시각</div><div class="wd-timebox-val">${wt.in}</div></div>
-      <div class="wd-timebox-item"><div class="wd-timebox-lab">${fmtYMD(viewDateForTime)} 퇴근시각</div><div class="wd-timebox-val">${wt.out}</div></div>
+      <div class="wd-timebox-item">출근시간:${wt.in} 퇴근시간:${wt.out}</div>
     </div>`;
   } else {
     timeBox.innerHTML = `<div class="wd-timebox"><div class="wd-timebox-none">${fmtYMD(viewDateForTime)} — ${statusLabel(valForTime)} (출퇴근 없음)</div></div>`;
